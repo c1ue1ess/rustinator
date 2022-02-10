@@ -65,8 +65,8 @@ fn position(buffer: &str) -> Search {
 
 fn go(_buffer: &str, s: Option<Search>) {
     let s = s.expect("No board found in go");
-    let depth = 6;
-    let best_move = search::root_search(s, depth);
+    let depth = 12;
+    let best_move = search::root_search_mt(s, depth);
     println!("bestmove {}", best_move.as_uci_string())
 
 }

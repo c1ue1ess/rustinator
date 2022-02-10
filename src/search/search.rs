@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use threadpool::ThreadPool;
+use std::sync::{Arc, Mutex, RwLock};
+
 
 use crate::chess::Board;
 use crate::chess::Move;
@@ -9,6 +12,7 @@ pub struct Search {
     pub board: Board,
     pub prev_moves: HashMap<[u64; 12], usize>,
 }
+
 
 pub fn root_search(mut search: Search, depth: usize) -> Move {
     if depth == 0 {
@@ -48,6 +52,53 @@ pub fn root_search(mut search: Search, depth: usize) -> Move {
         Some(bm) => bm,
         None => best_move_no_tfr.unwrap()
     }
+}
+
+
+pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
+    if depth == 0 {
+        println!("what");
+    }
+
+    
+    let moves = movegen::gen_moves(&search.board);
+    
+    let pool = ThreadPool::new(moves.len());
+    
+
+
+    let player = if search.board.colour == 0 { 1 } else { -1 };
+    let mvs: Arc<Mutex<(Option<Move>, i32, Board)>> = Arc::new(Mutex::new((None, i32::MIN, search.board)));
+    let prev_moves = Arc::new(RwLock::new(search.prev_moves));
+    
+    for m in moves {
+        let mv = Arc::clone(&mvs);
+        let prev_m = Arc::clone(&prev_moves);
+
+        pool.execute(move || {
+            search.board.make(&m);
+            
+            if movegen::check_check(&search.board, 
+                &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]), &(1 - search.board.colour),) > 0 {
+                    search.board.unmake(&m);
+                    return;
+                }
+                
+                let score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
+                
+                let mut best_m = mv.lock().unwrap();
+                if score > best_m.1 && *prev_m.read().unwrap().get(&search.board.pieces).unwrap_or(&0) < 2 {
+                        best_m.0 = Some(m);
+                        best_m.1 = score;
+                }
+            search.board.unmake(&m);
+        });
+    }
+
+    pool.join();
+    let best_move = mvs.lock().unwrap().0.unwrap();
+
+    best_move
 }
 
 fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32{
