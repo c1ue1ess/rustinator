@@ -3,13 +3,6 @@
 version = 3
 
 [[package]]
-name = "Rustinator"
-version = "0.1.0"
-dependencies = [
- "threadpool",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -32,6 +25,13 @@ checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi",
  "libc",
+]
+
+[[package]]
+name = "rustinator"
+version = "0.1.0"
+dependencies = [
+ "threadpool",
 ]
 
 [[package]]

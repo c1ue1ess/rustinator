@@ -1,7 +1,6 @@
 use crate::chess::Board;
 use crate::chess::Move;
 use crate::chess::movegen;
-use crate::chess::moves::MoveType;
 
 const PAWN: i32 = 100;
 const KNIGHT: i32 = 350;
@@ -14,11 +13,6 @@ pub const CHECKMATE: i32 = 10000000;
 
 
 pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32) -> i32 {
-
-    // if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &(b.colour),) > 0 {
-    //     return i32::MIN + 1;
-    // }
-
     let eval = evaluate(b, m, player);
     
     if eval >= beta {
@@ -35,7 +29,6 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
     
     let mut score;
     for cap in captures {
-        //println!("{}\n{}\n", b, cap);
         b.make(&cap);
         
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
@@ -65,41 +58,29 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
     }
 }
 
-pub fn evaluate(b: &Board, m: &Move, player: i32) -> i32 {
+pub fn evaluate(b: &Board, _m: &Move, player: i32) -> i32 {
     let mut eval = 0;
     eval += mat_balance(b);
-    //eval += pos_balance(b);
-    eval *= player;
+    
+	
+	eval *= player;
  
 
     eval 
 }
 
-fn mat_balance(b: &Board) -> i32 {
-    let mut balance = 0;
-	let wp: i32 = b.pieces[0].count_ones() as i32;
-	let bp: i32 = b.pieces[1].count_ones() as i32;
-	let wn: i32 = b.pieces[2].count_ones() as i32;
-	let bn: i32 = b.pieces[3].count_ones() as i32;
-	let wr: i32 = b.pieces[4].count_ones() as i32;
-	let br: i32 = b.pieces[5].count_ones() as i32;
-	let wb: i32 = b.pieces[6].count_ones() as i32;
-	let bb: i32 = b.pieces[7].count_ones() as i32;
-	let wq: i32 = b.pieces[8].count_ones() as i32;
-	let bq: i32 = b.pieces[9].count_ones() as i32;
-	let wk: i32 = b.pieces[10].count_ones() as i32;
-	let bk: i32 = b.pieces[11].count_ones() as i32;
+fn mat_balance(b: &Board) -> i32 {	
+	let pawns = PAWN*(b.pieces[0].count_ones() - b.pieces[1].count_ones()) as i32;
+	let knights = KNIGHT*(b.pieces[2].count_ones() - b.pieces[3].count_ones()) as i32;
+	let rooks = ROOK*(b.pieces[4].count_ones() - b.pieces[5].count_ones()) as i32;
+	let bishops = BISHOP*(b.pieces[6].count_ones() - b.pieces[7].count_ones()) as i32;
+	let queens = QUEEN*(b.pieces[8].count_ones() - b.pieces[9].count_ones()) as i32;
+	let kings = KING*(b.pieces[10].count_ones() - b.pieces[11].count_ones()) as i32;
 
-	balance += (wp - bp) * PAWN;
-	balance += (wn - bn) * KNIGHT;
-	balance += (wr - br) * ROOK;
-	balance += (wb - bb) * BISHOP;
-	balance += (wq - bq) * QUEEN;
-	balance += (wk - bk) * KING;
-
-	balance
+	pawns + knights + rooks + bishops + queens + kings
 }
 
+#[allow(dead_code)]
 fn pos_balance(b: &Board) -> i32 {
     let mut balance = 0;
 

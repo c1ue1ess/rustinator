@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::chess::Board;
 use crate::chess::Move;
-use crate::movegen;
+use crate::chess::movegen;
 use crate::search::eval;
 
 pub struct Search {

@@ -5,8 +5,12 @@ use crate::chess::*;
 pub fn gen_moves(b: &Board) -> Vec<Move> {
     let mut moves = Vec::new();
     all_attk(&mut moves, b);
+
+    // sort attacks by most valuable capture
     moves.sort_unstable_by(|a, b| a.xpiece.cmp(&b.xpiece).reverse());
+    
     all_quiet(&mut moves, b);
+    
     moves
 }
 
@@ -82,27 +86,12 @@ fn add_wp_attk(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_fw(&attk);
             if to > 55 {
                 for i in [8, 4, 2, 6] {
-                    moves.push(Move::new_promo_capture(
-                        from,
-                        to,
-                        0,
-                        get_xpiece(to, &b),
-                        b.ep,
-                        b.castle_state,
-                        i,
-                    ));
+                    moves.push(Move::new_promo_capture( from, to, 0, get_xpiece(to, &b), b.ep, b.castle_state, i));
                 }
             } else if to as u8 == b.ep {
                 moves.push(Move::new_ep_capture(from, to, 0, 1, b.ep, b.castle_state));
             } else {
-                moves.push(Move::new_capture(
-                    from,
-                    to,
-                    0,
-                    get_xpiece(to, &b),
-                    b.ep,
-                    b.castle_state,
-                ));
+                moves.push(Move::new_capture( from, to, 0, get_xpiece(to, &b), b.ep, b.castle_state));
             }
             
             attk &= attk - 1;
@@ -156,27 +145,12 @@ fn add_bp_attk(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_fw(&attk);
             if to < 8 {
                 for i in [9, 5, 3, 7] {
-                    moves.push(Move::new_promo_capture(
-                        from,
-                        to,
-                        1,
-                        get_xpiece(to, &b),
-                        b.ep,
-                        b.castle_state,
-                        i,
-                    ));
+                    moves.push(Move::new_promo_capture( from, to, 1, get_xpiece(to, &b), b.ep, b.castle_state, i));
                 }
             } else if to as u8 == b.ep {
                 moves.push(Move::new_ep_capture(from, to, 1, 0, b.ep, b.castle_state));
             } else {
-                moves.push(Move::new_capture(
-                    from,
-                    to,
-                    1,
-                    get_xpiece(to, &b),
-                    b.ep,
-                    b.castle_state,
-                ));
+                moves.push(Move::new_capture( from, to, 1, get_xpiece(to, &b), b.ep, b.castle_state));
             }
 
             attk &= attk - 1;
@@ -198,13 +172,7 @@ fn add_knight_quiet(moves: &mut Vec<Move>, b: &Board) {
         
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet(
-                from,
-                to,
-                2 + b.colour,
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_quiet(from,to,2 + b.colour,b.ep,b.castle_state));
             quiet &= quiet - 1;
         }
         knights &= knights - 1;
@@ -224,14 +192,7 @@ fn add_knight_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture(
-                from,
-                to,
-                2 + b.colour,
-                get_xpiece(to, &b),
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_capture( from, to, 2 + b.colour, get_xpiece(to, &b), b.ep, b.castle_state));
             attk &= attk - 1;
         }
         knights &= knights - 1;
@@ -251,13 +212,7 @@ fn add_rook_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet(
-                from,
-                to,
-                4 + b.colour,
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_quiet( from, to, 4 + b.colour, b.ep, b.castle_state));
             quiet &= quiet - 1;
         }
         rooks &= rooks - 1;
@@ -277,14 +232,7 @@ fn add_rook_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture(
-                from,
-                to,
-                4 + b.colour,
-                get_xpiece(to, &b),
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_capture( from, to, 4 + b.colour, get_xpiece(to, &b), b.ep, b.castle_state));
             attk &= attk - 1;
         }
         rooks &= rooks - 1;
@@ -304,13 +252,7 @@ fn add_bishop_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet(
-                from,
-                to,
-                6 + b.colour,
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_quiet( from, to, 6 + b.colour, b.ep, b.castle_state));
             quiet &= quiet - 1;
         }
         bishops &= bishops - 1;
@@ -329,14 +271,7 @@ fn add_bishop_attk(moves: &mut Vec<Move>, b: &Board) {
         attk = m & b.util[1 - b.colour];
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture(
-                from,
-                to,
-                6 + b.colour,
-                get_xpiece(to, &b),
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_capture( from, to, 6 + b.colour, get_xpiece(to, &b), b.ep, b.castle_state));
             attk &= attk - 1;
         }
         bishops &= bishops - 1;
@@ -356,13 +291,7 @@ fn add_queen_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet(
-                from,
-                to,
-                8 + b.colour,
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_quiet( from, to, 8 + b.colour, b.ep, b.castle_state));
             quiet &= quiet - 1;
         }
         queens &= queens - 1;
@@ -382,14 +311,7 @@ fn add_queen_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture(
-                from,
-                to,
-                8 + b.colour,
-                get_xpiece(to, &b),
-                b.ep,
-                b.castle_state,
-            ));
+            moves.push(Move::new_capture( from, to, 8 + b.colour, get_xpiece(to, &b), b.ep, b.castle_state));
             attk &= attk - 1;
         }
         queens &= queens - 1;
@@ -411,16 +333,11 @@ fn add_king_quiet(moves: &mut Vec<Move>, b: &Board) {
             quiet &= quiet - 1;
             continue;
         }
-        moves.push(Move::new_quiet(
-            from,
-            to,
-            10 + b.colour,
-            b.ep,
-            b.castle_state,
-        ));
+        moves.push(Move::new_quiet( from, to, 10 + b.colour, b.ep, b.castle_state));
         quiet &= quiet - 1;
     }
 
+    // no need to check castle moves if king is in check
     if check_check(b, &from, &b.colour) > 0 { return; }
     
     if b.colour == 0
@@ -517,7 +434,6 @@ pub fn bitscn_fw(bb: &u64) -> usize {
 }
 
 pub fn bitscn_rv(bb: &u64) -> usize {
-    // (64 - bb.leading_zeros()) as usize
     (bb.leading_zeros() ^ 63) as usize
 }
 
@@ -581,9 +497,9 @@ fn bpawn_attk(index: usize, b: &Board) -> u64 {
 
 fn pos_ray(dir: usize, sq: usize, b: &Board) -> u64 {
     let mv = RAYS[dir][sq];
-    let blk = mv & b.util[2]; // ^ 0x8000000000000000;
+    let blk = mv & b.util[2];
     let b_index: usize = bitscn_fw(&blk) as usize;
-    mv ^ RAYS[dir][b_index] // ^ SQUARES[b_index])
+    mv ^ RAYS[dir][b_index] 
 }
 
 fn neg_ray(dir: usize, sq: usize, b: &Board) -> u64 {
@@ -591,7 +507,7 @@ fn neg_ray(dir: usize, sq: usize, b: &Board) -> u64 {
     let blk = mv & b.util[2] | 1;
     let b_index: usize = bitscn_rv(&blk) as usize;
 
-    mv ^ (RAYS[dir][b_index]) // ^ SQUARES[b_index])
+    mv ^ (RAYS[dir][b_index])
 }
 
 fn rook_moves(sq: usize, b: &Board) -> u64 {
@@ -607,8 +523,6 @@ fn queen_moves(sq: usize, b: &Board) -> u64 {
 }
 
 pub fn check_check(b: &Board, k_index: &usize, colour: &usize) -> u64 {
-    //let mut check: u64 = 0;
-    
     let pawn: u64 = if *colour == 0 {
         wpawn_attk(*k_index, &b) & b.pieces[1]
     } else {
@@ -621,19 +535,6 @@ pub fn check_check(b: &Board, k_index: &usize, colour: &usize) -> u64 {
     | bishop_moves(*k_index, &b) & (b.pieces[7 - *colour] | b.pieces[9 - *colour]) 
     | king_moves(*k_index) & (b.pieces[11 - *colour])
 }
-
-// fn check_wking(b: &Board) -> bool {
-
-// }
-// fn check_wqueen(b: &Board) -> bool {
-    
-// }
-// fn check_bking(b: &Board) -> bool {
-    
-// }
-// fn check_bqueen(b: &Board) -> bool {
-    
-// }
 
 pub fn get_xpiece(sq: usize, b: &Board) -> usize {
     if (SQUARES[sq] & b.pieces[1 - b.colour]) > 0 {
@@ -671,17 +572,17 @@ pub fn get_piece(sq: usize, b: &Board) -> usize {
     }
 }
 
+#[allow(dead_code)]
+// prints a bit board over the top of a board
 pub fn print_bb(m: u64, b: &Board) {
     let mut out = String::new();
 
     for i in (1..9).rev() {
-        //(int i = 8; i > 0; i--) {
         let s = i.to_string();
         out.push_str(&s);
         out.push_str("   ");
 
         for j in i * 8 - 8..i * 8 {
-            // (int j = (i * 8 - 8); j < (i * 8); j++) {
             if (SQUARES[j] & m) > 0 {
                 out.push_str("(");
             } else {

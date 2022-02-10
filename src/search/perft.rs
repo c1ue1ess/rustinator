@@ -93,19 +93,8 @@ pub fn perft_counter(
 }
 #[allow(dead_code)]
 pub fn perft(b: &mut Board, depth: usize) -> usize {
-    
-    let in_check = if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &(b.colour),) > 0 {
-        true
-    } else {
-        false
-    };
-
     if depth == 0 {
-        if in_check {
-            return 0;
-        } else {
             return 1;
-        }
     }
 
     let mut move_count = 0;
@@ -113,11 +102,9 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     for m in moves {
         b.make(&m);
         
-        if in_check {
-            if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-                b.unmake(&m);
-                continue;
-            }
+        if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
+            b.unmake(&m);
+            continue;
         }
         
         move_count += perft(b, depth - 1);

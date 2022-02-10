@@ -1,6 +1,5 @@
 use std::io;
 use std::collections::HashMap;
-use std::fs;
 
 use crate::chess::Board;
 use crate::chess::moves::Move;
@@ -52,12 +51,14 @@ fn position(buffer: &str) -> Search {
         for m in &pos[3..] {
             dbg!(m);
             board.make(&Move::new_from_text(&m, &board));
+            
+            // add board to prev_moves hashmap
             let entry = prev_moves.entry(board.pieces).or_insert(0);
             *entry += 1;
         }
     }
 
-    //fs::write("last_pos.txt", buffer.as_bytes()).unwrap();
+    // std::fs::write("last_pos.txt", buffer.as_bytes()).unwrap();
 
     Search { board, prev_moves }
 }
