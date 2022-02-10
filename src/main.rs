@@ -3,8 +3,8 @@ mod search;
 mod uci;
 
 fn main() {
-    let debugger = true;
-    // let debugger = false;
+    // let debugger = true;
+    let debugger = false;
     
     if debugger {
         debug();
