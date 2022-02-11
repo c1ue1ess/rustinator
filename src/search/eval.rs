@@ -64,7 +64,8 @@ pub fn evaluate(b: &Board, _m: &Move, player: i32) -> i32 {
 	
 	eval *= player;
 	
-    eval += movegen::gen_moves(b).len() as i32 * 1000;
+	// mobility
+    eval += movegen::gen_moves(b).len() as i32 * 50;
 
     eval 
 }
