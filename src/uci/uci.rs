@@ -76,7 +76,7 @@ fn go(buffer: &str, s: Option<Search>, use_book: bool) -> bool {
 
     let s = s.expect("No board found in go");
     let depth = 6;
-    let best_move = search::root_search(s, depth);
+    let best_move = search::root_search_mt(s, depth);
     println!("bestmove {}", best_move.as_uci_string());
 
     false
