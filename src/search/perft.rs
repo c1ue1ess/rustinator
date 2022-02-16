@@ -76,19 +76,19 @@ pub fn perft_counter(
     }
     let moves = movegen::gen_moves(&b);
     for m in moves {
-        b.make(&m);
+        b.make_no_hashing(&m);
         if movegen::check_check(
             b,
             &movegen::bitscn_fw(&b.pieces[11 - b.colour]),
             &(1 - b.colour),
         ) > 0
         {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             continue;
         }
 
         perft_counter(b, depth - 1, counter, Some(&m));
-        b.unmake(&m);
+        b.unmake_no_hashing(&m);
     }
 }
 #[allow(dead_code)]
@@ -100,15 +100,15 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     let mut move_count = 0;
     let moves = movegen::gen_moves(&b);
     for m in moves {
-        b.make(&m);
+        b.make_no_hashing(&m);
         
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             continue;
         }
         
         move_count += perft(b, depth - 1);
-        b.unmake(&m);
+        b.unmake_no_hashing(&m);
     }
 
     move_count
@@ -125,7 +125,7 @@ pub fn perft_multi_thread(b: &Board, depth: usize) {
         let move_count = Arc::clone(&total_count);
 
         pool.execute(move || {
-            new_b.make(&m);
+            new_b.make_no_hashing(&m);
 
             if movegen::check_check(
                 &new_b,
@@ -133,11 +133,11 @@ pub fn perft_multi_thread(b: &Board, depth: usize) {
                 &(1 - new_b.colour),
             ) > 0
             {
-                new_b.unmake(&m);
+                new_b.unmake_no_hashing(&m);
                 return;
             }
             let mc = perft(&mut new_b, depth - 1);
-            new_b.unmake(&m);
+            new_b.unmake_no_hashing(&m);
             dbg!(mc);
             let mut moves = move_count.lock().unwrap();
             *moves += mc;

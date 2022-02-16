@@ -1,9 +1,15 @@
+#![allow(unused)]
+use std::collections::HashMap;
+use std::fs;
+
+use crate::chess::{ Move, Board };
+use crate::search::{ TTable };
+
 mod chess;
 mod search;
 mod uci;
 
 fn main() {
-    // let debugger = true;
     let debugger = false;
     
     if debugger {
@@ -22,28 +28,30 @@ fn debug() {
     // println!("{}", b);
 
     // let f = fs::read("target/debug/last_pos.txt").unwrap();
+    let buffer = crate::uci::WHITE_OPENS[0];
     // let buffer = String::from_utf8_lossy(&f);
 
 
-    // let mut prev_moves: HashMap<[u64; 12], usize> = HashMap::new();
-    // let mut board = Board::new();
-    // let entry = prev_moves.entry(board.pieces).or_insert(0);
-    // *entry += 1; 
+    let mut prev_moves: HashMap<[u64; 12], usize> = HashMap::new();
+    let mut board = Board::new();
+    let mut tt = TTable::new();
+    let entry = prev_moves.entry(board.pieces).or_insert(0);
+    *entry += 1; 
     
-    // let pos: Vec<&str> = buffer.trim().split(' ').collect();
+    let pos: Vec<&str> = buffer.trim().split(' ').collect();
     
-    // if pos.len() > 2 {
-    //     for m in &pos[3..] {
-    //         dbg!(m);
-    //         let mv = &Move::new_from_text(&m, &board);
-    //         board.make(mv);
-    //         println!("{board}\n{mv}");
-    //         let entry = prev_moves.entry(board.pieces).or_insert(0);
-    //         *entry += 1;
-    //     }
-    // }
+    if pos.len() > 2 {
+        for m in &pos[3..] {
+            dbg!(m);
+            let mv = &Move::new_from_text(&m, &board);
+            board.make(mv, &tt);
+            println!("{board}\n{mv}");
+            let entry = prev_moves.entry(board.pieces).or_insert(0);
+            *entry += 1;
+        }
+    }
 
-    // // search::root_search(search::Search { board, prev_moves }, 6);
+    // search::root_search(search::Search { board, prev_moves }, 6, &mut tt);
 
     // for m in movegen::gen_moves(&board) {
     //     board.make(&m);
@@ -53,10 +61,6 @@ fn debug() {
     // }
 
 
-    let depth = 6;
-
-    let mut b = crate::chess::Board::new();
-
-    println!("single thread = {}", search::perft::perft(&mut b, depth));
+    //println!("single thread = {}", search::perft::perft(&mut b, depth));
     // search::perft_multi_thread(&mut b, depth);
 }

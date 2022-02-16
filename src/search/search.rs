@@ -1,61 +1,84 @@
+#![allow(unused)]
 use std::collections::HashMap;
 use threadpool::ThreadPool;
 use std::sync::{Arc, Mutex, RwLock};
-
+use std::time::{Instant, Duration};
 
 use crate::chess::Board;
 use crate::chess::Move;
 use crate::chess::movegen;
 use crate::search::eval;
+use crate::search::{ TTable, TEntry, NodeType };
+
+const TIME_LIM_SEC: u64 = 10;
 
 pub struct Search {
     pub board: Board,
     pub prev_moves: HashMap<[u64; 12], usize>,
 }
 
+pub fn iterative_deepening_search(mut search: Search, tt: &mut TTable) -> Option<Move>{
+    let start_time = Instant::now();    
+    let mut best_score = i32::MIN;
+    let mut best_move: Option<Move> = None;
 
-pub fn root_search(mut search: Search, depth: usize) -> Move {
-    if depth == 0 {
-        println!("what");
+    for depth in 1..20 {
+        let (curr_score, curr_move) = root_search(&mut search, depth, &start_time, tt);
+
+        if curr_score > best_score {
+            best_score = curr_score;
+            best_move = curr_move;
+        }
     }
 
-    let moves = movegen::gen_moves(&search.board);
+    best_move
+}
+
+pub fn root_search(search: &mut Search, depth: usize, start_time: &Instant, tt: &mut TTable) -> (i32, Option<Move>) {
     let mut best_move = None;
-    let mut best_move_no_tfr = None;
     let mut best_score = i32::MIN;
     let player = if search.board.colour == 0 { 1 } else { -1 };
+    
     let mut score;
+    let moves = movegen::gen_moves(&search.board);
     for m in moves {
-        search.board.make(&m);
+        if Instant::now().duration_since(*start_time) >= Duration::from_secs(TIME_LIM_SEC) {
+            return (best_score, best_move)
+        }
+        
+        search.board.make(&m, tt);
         
         if movegen::check_check(&search.board, 
             &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]), &(1 - search.board.colour),) > 0 {
-                search.board.unmake(&m);
+                search.board.unmake(&m, tt);
                 continue;
         }
 
-        score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
+        score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player, tt);
     
         if score > best_score {
-            best_move_no_tfr = Some(m);
             if search.prev_moves.get(&search.board.pieces).unwrap_or(&0) < &2{
                 best_move = Some(m);
                 best_score = score;
             }
         }
         
-        search.board.unmake(&m);
+        search.board.unmake(&m, tt);
     }
 
-    match best_move {
-        Some(bm) => bm,
-        None => best_move_no_tfr.unwrap()
-    }
+    (best_score, best_move)
+    
 }
 
-fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32{
+fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32, tt: &mut TTable) -> i32{
+    if let Some(hash) = tt.get(b.hash, depth as u8) {
+        return hash;
+    }
+    
     if depth == 0 { 
+        //dbg!(depth);
         let eval = eval::quiesce(b, m, alpha, beta, player);
+        tt.insert(TEntry::new(b.hash, 0, eval, NodeType::Pv));
         return eval;
     }
     
@@ -65,37 +88,48 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
     let mut checkmate = true;
     
     for m in moves {
-        b.make(&m);
+        b.make(&m, tt);
         
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-            b.unmake(&m);
+            b.unmake(&m, tt);
             continue;
         } else {
             checkmate = false;
         }
         
-        score = -negamax(b, &m, -beta, -alpha, depth-1, -player);
+        // score = match tt.get(b.hash) {
+        //     Some(score) => -score,
+        //     None => {
+        //         score = negamax(b, &m, -beta, -alpha, depth-1, -player, tt);
+        //         tt.insert(TEntry::new(b.hash, depth as u8, score));
+        //         -score
+        //     }
+        // };
+
+        score = -negamax(b, &m, -beta, -alpha, depth-1, -player, tt);
         
         if score >= beta {
-            b.unmake(&m);
+            tt.insert(TEntry::new(b.hash, depth as u8, beta, NodeType::Beta));
+            b.unmake(&m, tt);
             return beta;
         }
         
         if score > alpha {
             alpha = score;
         }
-        b.unmake(&m);
+        b.unmake(&m, tt);
     }
     
     if checkmate {
+        tt.insert(TEntry::new(b.hash, depth as u8, alpha, NodeType::Alpha));
         -eval::CHECKMATE * depth as i32
     } else {
+        tt.insert(TEntry::new(b.hash, depth as u8, alpha, NodeType::Alpha));
         alpha
     }
 }
 
 // WORK IN PROGRESS
-#[allow(dead_code)]
 pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
     if depth == 0 {
         println!("what");
@@ -115,15 +149,15 @@ pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
         let prev_m = Arc::clone(&prev_moves);
 
         pool.execute(move || {
-            search.board.make(&m);
+            search.board.make_no_hashing(&m);
             
             if movegen::check_check(&search.board, &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]), 
                 &(1 - search.board.colour),) > 0 {
-                    search.board.unmake(&m);
+                    search.board.unmake_no_hashing(&m);
                     return;
                 }
                 
-            let score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
+            let score =0;// -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
             
             let mut best_m = mv.lock().unwrap();
         
@@ -132,7 +166,7 @@ pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
                 best_m.1 = score;
             }
             
-            search.board.unmake(&m);
+            search.board.unmake_no_hashing(&m);
         });
     }
     
@@ -142,10 +176,6 @@ pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
     best_move
 }
     
-
-
-
-#[allow(dead_code)]
 pub fn root_search_mtpvs(mut search: Search, depth: usize) -> Move {
     if depth == 0 {
         println!("what");
@@ -168,22 +198,22 @@ pub fn root_search_mtpvs(mut search: Search, depth: usize) -> Move {
         let prev_m = Arc::clone(&prev_moves);
 
         pool.execute(move || {
-            search.board.make(&m);
+            search.board.make_no_hashing(&m);
             
             if movegen::check_check(&search.board, 
                 &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]), &(1 - search.board.colour),) > 0 {
-                    search.board.unmake(&m);
+                    search.board.unmake_no_hashing(&m);
                     return;
                 }
                 
-                let score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
+                let score =0;// -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
                 
                 let mut best_m = mv.lock().unwrap();
                 if score > best_m.1 && *prev_m.read().unwrap().get(&search.board.pieces).unwrap_or(&0) < 2 {
                     best_m.0 = Some(m);
                     best_m.1 = score;
                 }
-                search.board.unmake(&m);
+                search.board.unmake_no_hashing(&m);
             });
         }
         
@@ -193,9 +223,6 @@ pub fn root_search_mtpvs(mut search: Search, depth: usize) -> Move {
     best_move
 }
         
-    
-
-#[allow(dead_code)]
 fn search_pv(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32{
     if depth == 0 { 
         let eval = eval::quiesce(b, m, alpha, beta, player);
@@ -206,9 +233,9 @@ fn search_pv(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, p
     let mut checkmate = true;
 
     for m in moves {
-        b.make(&m);
+        b.make_no_hashing(&m);
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             continue;
         } else {
             checkmate = false;
@@ -217,14 +244,14 @@ fn search_pv(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, p
         let score = -search_pv(b, &m, -beta, -alpha, depth-1, -player);
         
         if score >= beta {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             return beta;
         }
         
         if score > alpha {
             alpha = score;
         }
-        b.unmake(&m);
+        b.unmake_no_hashing(&m);
         
         if checkmate {
             return -eval::CHECKMATE * depth as i32
@@ -240,7 +267,6 @@ fn search_pv(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, p
     }
 }
 
-#[allow(dead_code)]
 fn pvs(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32{
     if depth == 0 { 
         let eval = eval::quiesce(b, m, alpha, beta, player);
@@ -251,9 +277,9 @@ fn pvs(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player:
     let mut checkmate = true;
 
     for m in moves {
-        b.make(&m);
+        b.make_no_hashing(&m);
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             continue;
         } else {
             checkmate = false;
@@ -262,14 +288,14 @@ fn pvs(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player:
         let score = -pvs(b, &m, -beta, -alpha, depth-1, -player);
         
         if score >= beta {
-            b.unmake(&m);
+            b.unmake_no_hashing(&m);
             return beta;
         }
         
         if score > alpha {
             alpha = score;
         }
-        b.unmake(&m);
+        b.unmake_no_hashing(&m);
     }
 
     if checkmate {

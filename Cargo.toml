@@ -19,3 +19,4 @@ overflow-checks = true
 
 [dependencies]
 threadpool = "1.8.1"
+rand = "0.8.4"

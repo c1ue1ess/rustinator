@@ -29,10 +29,10 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
     
     let mut score;
     for cap in captures {
-        b.make(&cap);
+        b.make_no_hashing(&cap);
         
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
-            b.unmake(&cap);
+            b.unmake_no_hashing(&cap);
             continue;
         } else { 
             checkmate = false
@@ -41,14 +41,14 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
         score = -quiesce(b, &cap, -beta, -alpha, -player);
         
         if score >= beta {
-            b.unmake(&cap);
+            b.unmake_no_hashing(&cap);
             return beta;
         }
         if score > alpha {
             alpha = score;
         }
         
-        b.unmake(&cap);
+        b.unmake_no_hashing(&cap);
     }
 
     if checkmate {

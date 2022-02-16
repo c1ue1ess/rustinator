@@ -1,7 +1,9 @@
+use std::fmt;
+
 use crate::chess::moves::{Move, MoveType};
 use crate::chess::SQUARES;
 use crate::chess::SQ_NAMES;
-use std::fmt;
+use crate::search::transposition_table::{TTable};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Board {
@@ -15,6 +17,8 @@ pub struct Board {
 
     pub halfmove: usize,
     pub fullmove: usize,
+
+    pub hash: u64
 }
 
 impl Board {
@@ -27,6 +31,7 @@ impl Board {
             castle_state: 0b1111,
             halfmove: 0,
             fullmove: 1,
+            hash: 0,
         };
 
         b.pieces[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; //wp 0
@@ -50,6 +55,13 @@ impl Board {
         b
     }
 
+    pub fn new_with_hash(tt: &TTable) -> Board {
+        let mut board = Board::new();
+        board.hash = board.get_hash(tt);
+        
+        board
+    }
+
     #[allow(dead_code)]
     pub fn new_from_fen(fen: &str) -> Board {
         let mut b = Board {
@@ -60,6 +72,7 @@ impl Board {
             castle_state: 0b1111,
             halfmove: 0,
             fullmove: 0,
+            hash: 0,
         };
         let fen: Vec<&str> = fen.split(' ').collect();
 
@@ -172,7 +185,256 @@ impl Board {
         b
     }
 
-    pub fn make(&mut self, m: &Move) {
+    pub fn make(&mut self, m: &Move, tt: &TTable) {
+        let from_to = SQUARES[m.from] | SQUARES[m.to];
+
+        self.pieces[m.piece] ^= from_to;
+        self.util[self.colour] ^= from_to;
+        self.util[2] ^= from_to;
+        
+        // clear ep file if there is one
+        if self.ep < 64 {
+            self.hash ^= tt.zorbist_array[773+ (self.ep % 8) as usize]; 
+        }
+        self.ep = 64;
+
+
+        self.hash ^= tt.zorbist_array[m.piece * 64 + m.from];
+        self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+
+        match &m.move_type {
+            MoveType::Quiet => {}
+
+            MoveType::Capture => {
+                self.pieces[m.xpiece] ^= SQUARES[m.to];
+                self.util[1 - self.colour] ^= SQUARES[m.to];
+                self.util[2] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+            }
+
+            MoveType::DoublePush => {
+                self.ep = (m.to - 8 + (self.colour * 16)) as u8;
+                self.hash ^= tt.zorbist_array[773+(self.ep % 8) as usize];
+            }
+
+            MoveType::EpCapture => {
+                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + (m.to - 8 + (self.colour * 16))];
+            }
+            
+            MoveType::Promo => {
+                self.pieces[self.colour] ^= SQUARES[m.to];
+                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+            }
+            
+            MoveType::PromoCapture => {
+                self.pieces[m.xpiece] ^= SQUARES[m.to];
+                self.util[1 - self.colour] ^= SQUARES[m.to];
+                self.util[2] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to];
+                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+            }
+            
+            MoveType::WKingSide => {
+                self.pieces[4] ^= SQUARES[7] | SQUARES[5];
+                self.util[0] ^= SQUARES[7] | SQUARES[5];
+                self.util[2] ^= SQUARES[7] | SQUARES[5];
+
+                self.hash ^= tt.zorbist_array[263]; // 4 * 64 + 7
+                self.hash ^= tt.zorbist_array[261]; // 4 * 64 + 5
+            }
+            
+            MoveType::WQueenSide => {
+                self.pieces[4] ^= SQUARES[0] | SQUARES[3];
+                self.util[0] ^= SQUARES[0] | SQUARES[3];
+                self.util[2] ^= SQUARES[0] | SQUARES[3];
+
+                self.hash ^= tt.zorbist_array[256]; // 4 * 64 + 0
+                self.hash ^= tt.zorbist_array[259]; // 4 * 64 + 3
+            }
+            
+            MoveType::BKingSide => {
+                self.pieces[5] ^= SQUARES[63] | SQUARES[61];
+                self.util[1] ^= SQUARES[63] | SQUARES[61];
+                self.util[2] ^= SQUARES[63] | SQUARES[61];
+
+                self.hash ^= tt.zorbist_array[383]; // 5 * 64 + 63
+                self.hash ^= tt.zorbist_array[381]; // 5 * 64 + 61
+            }
+            
+            MoveType::BQueenSide => {
+                self.pieces[5] ^= SQUARES[56] | SQUARES[59];
+                self.util[1] ^= SQUARES[56] | SQUARES[59];
+                self.util[2] ^= SQUARES[56] | SQUARES[59];
+
+                self.hash ^= tt.zorbist_array[376]; // 5 * 64 + 56
+                self.hash ^= tt.zorbist_array[379]; // 5 * 64 + 59
+            }
+        }
+
+        if m.piece == 10 {
+            self.castle_state &= 0b11;
+            self.hash ^= tt.zorbist_array[769];
+            self.hash ^= tt.zorbist_array[770];
+        }
+        else if m.piece == 11 {
+            self.castle_state &= 0b1100;
+            self.hash ^= tt.zorbist_array[771];
+            self.hash ^= tt.zorbist_array[772];
+        }
+        
+
+        if m.from == 7 || m.to == 7 && self.castle_state & 0b1000 > 0 {
+            self.castle_state &= 0b0111;
+            self.hash ^= tt.zorbist_array[769];
+        }
+        if m.from == 0 || m.to == 0 && self.castle_state & 0b1000 > 0 {
+            self.castle_state &= 0b1011;
+            self.hash ^= tt.zorbist_array[770];
+        }
+        if m.from == 63 || m.to == 63 && self.castle_state & 0b1000 > 0 {
+            self.castle_state &= 0b1101;
+            self.hash ^= tt.zorbist_array[771];
+        }
+        if m.from == 56 || m.to == 56 && self.castle_state & 0b1000 > 0 {
+            self.castle_state &= 0b1110;
+            self.hash ^= tt.zorbist_array[772];
+        }
+
+
+        self.colour ^= 1;
+        self.hash ^= tt.zorbist_array[768];
+
+        self.fullmove += self.colour;
+    }
+
+    pub fn unmake(&mut self, m: &Move, tt: &TTable) {
+        self.fullmove -= self.colour;
+        
+        let from_to = SQUARES[m.from] | SQUARES[m.to];
+
+        // if the castle rights of last move are different, xor the hash
+        // as castle rights can only be lost, there is no need to check if a bit is present in self rather than m
+        if self.castle_state & 0b1000 == 0 && m.castle_rights & 0b1000 > 0 {
+            self.hash ^= tt.zorbist_array[769];
+        }
+        if self.castle_state & 0b100 == 0 && m.castle_rights & 0b100 > 0 {
+            self.hash ^= tt.zorbist_array[770];
+        }
+        if self.castle_state & 0b10 == 0 && m.castle_rights & 0b10 > 0 {
+            self.hash ^= tt.zorbist_array[771];
+        }
+        if self.castle_state & 0b1 == 0 && m.castle_rights & 0b1 > 0 {
+            self.hash ^= tt.zorbist_array[772];
+        }
+
+        self.castle_state = m.castle_rights;
+        
+        self.colour ^= 1;
+        self.hash ^= tt.zorbist_array[768];
+
+        // clear ep file in hash and set if needed
+        if self.ep < 64 {
+            self.hash ^= tt.zorbist_array[773+ (self.ep % 8) as usize];
+        }
+        if m.ep < 64 {
+            self.hash ^= tt.zorbist_array[773+ (m.ep % 8) as usize];
+        }
+        self.ep = m.ep;
+        
+        self.pieces[m.piece] ^= from_to;
+        self.util[self.colour] ^= from_to;
+        self.util[2] ^= from_to;
+
+        self.hash ^= tt.zorbist_array[m.piece * 64 + m.from];
+        self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+
+        match &m.move_type {
+            MoveType::Quiet => {}
+
+            MoveType::Capture => {
+                self.pieces[m.xpiece] ^= SQUARES[m.to];
+                self.util[1 - self.colour] ^= SQUARES[m.to];
+                self.util[2] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+            }
+            MoveType::DoublePush => {}
+            MoveType::EpCapture => {
+                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + (m.to - 8 + (self.colour * 16))];
+            }
+            MoveType::Promo => {
+                self.pieces[self.colour] ^= SQUARES[m.to];
+                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+            }
+            MoveType::PromoCapture => {
+                self.pieces[m.xpiece] ^= SQUARES[m.to];
+                self.util[1 - self.colour] ^= SQUARES[m.to];
+                self.util[2] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to];
+                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+
+                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+            }
+            MoveType::WKingSide => {
+                self.pieces[4] ^= SQUARES[7] | SQUARES[5];
+                self.util[0] ^= SQUARES[7] | SQUARES[5];
+                self.util[2] ^= SQUARES[7] | SQUARES[5];
+
+                self.hash ^= tt.zorbist_array[263]; // 4 * 64 + 7
+                self.hash ^= tt.zorbist_array[261]; // 4 * 64 + 5
+            }
+            MoveType::WQueenSide => {
+                self.pieces[4] ^= SQUARES[0] | SQUARES[3];
+                self.util[0] ^= SQUARES[0] | SQUARES[3];
+                self.util[2] ^= SQUARES[0] | SQUARES[3];
+
+                self.hash ^= tt.zorbist_array[256]; // 4 * 64 + 0
+                self.hash ^= tt.zorbist_array[259]; // 4 * 64 + 3
+            }
+            MoveType::BKingSide => {
+                self.pieces[5] ^= SQUARES[63] | SQUARES[61];
+                self.util[1] ^= SQUARES[63] | SQUARES[61];
+                self.util[2] ^= SQUARES[63] | SQUARES[61];
+
+                self.hash ^= tt.zorbist_array[383]; // 5 * 64 + 63
+                self.hash ^= tt.zorbist_array[381]; // 5 * 64 + 61
+            }
+            MoveType::BQueenSide => {
+                self.pieces[5] ^= SQUARES[56] | SQUARES[59];
+                self.util[1] ^= SQUARES[56] | SQUARES[59];
+                self.util[2] ^= SQUARES[56] | SQUARES[59];
+
+                self.hash ^= tt.zorbist_array[376]; // 5 * 64 + 56
+                self.hash ^= tt.zorbist_array[379]; // 5 * 64 + 59
+            }
+        }
+    }
+
+
+
+    #[allow(dead_code)]
+    pub fn make_no_hashing(&mut self, m: &Move) {
         let from_to = SQUARES[m.from] | SQUARES[m.to];
 
         self.pieces[m.piece] ^= from_to;
@@ -261,7 +523,8 @@ impl Board {
         self.fullmove += self.colour;
     }
 
-    pub fn unmake(&mut self, m: &Move) {
+    #[allow(dead_code)]
+    pub fn unmake_no_hashing(&mut self, m: &Move) {
         let from_to = SQUARES[m.from] | SQUARES[m.to];
 
         self.castle_state = m.castle_rights;
@@ -319,7 +582,46 @@ impl Board {
             }
         }
     }
+
+
+    // designed to get original hash or only hash in certain circumstances 
+    // (ie not very quick compared to incremental update of the board) 
+    pub fn get_hash(&self, tt: &TTable) -> u64 {
+        let mut hash: u64 = 0;
+
+        for piece in 0..12 {
+            for rank in 0..8{
+                for file in 0..8 {
+                    if (self.pieces[piece] & SQUARES[rank*8+file]) > 0 {
+                        hash ^= tt.zorbist_array[piece*64 + rank*8 + file];
+                    }
+                }
+            }
+        } 
+
+        hash ^= if self.colour == 1 { tt.zorbist_array[768] } else { 0 };
+        
+        if self.castle_state & 0b1000 == 1{
+            hash ^= tt.zorbist_array[769];
+        }
+        if self.castle_state & 0b100 == 1{
+            hash ^= tt.zorbist_array[770];
+        }
+        if self.castle_state & 0b10 == 1{
+            hash ^= tt.zorbist_array[771];
+        }
+        if self.castle_state & 0b1 == 1{
+            hash ^= tt.zorbist_array[772];
+        }
+
+        if self.ep < 64 {
+            hash ^= tt.zorbist_array[773+(self.ep - (self.ep / 8)) as usize];
+        }
+
+        hash
+    }
 }
+
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -375,4 +677,32 @@ impl fmt::Display for Board {
         out.push_str("\n     A B C D E F G H\n");
         write!(f, "{}", out)
     }
+}
+
+
+#[test]
+fn hash_make_unmake() {
+    let mut tt = TTable::new();
+    let mut b = Board::new_with_hash(&tt);
+    let position = "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 e7e5 d4b5 a7a6 b5d6 f8d6 d1d6 d8f6 d6f6 g8f6 f2f3 d7d5 e4d5 f6d5";
+    let mut moves = Vec::new();
+
+    let og = b.hash;
+
+    for p in position.split(" ") {
+        let m = Move::new_from_text(p, &b);        
+        moves.push(m);
+        println!("{b}\n{m}");
+        b.make(&m, &tt);
+    }
+
+    println!("{}\n{}", b.hash, b);
+
+    for m in moves.iter().rev() {
+        b.unmake(&m, &tt);
+    }
+
+    println!("{}\n{}", b.hash, b);
+
+    assert_eq!(og, b.hash)
 }
