@@ -27,7 +27,7 @@ pub fn uci() {
             isready();
         } else if buffer.starts_with("position") {
             last_pos_cmd = String::from(&buffer);
-            search = Some(position(&buffer));
+            search = Some(position(&buffer, &tt));
         } else if buffer.starts_with("go") {
 
             use_book = go(&last_pos_cmd.trim(), search.take(), use_book, &mut tt);
@@ -46,9 +46,9 @@ fn isready() {
     println!("readyok");
 }
 
-fn position(buffer: &str) -> Search {
+fn position(buffer: &str, tt: &TTable) -> Search {
     let mut prev_moves: HashMap<[u64; 12], usize> = HashMap::new();
-    let mut board = Board::new();
+    let mut board = Board::new_with_hash(&tt);
     let entry = prev_moves.entry(board.pieces).or_insert(0);
     *entry += 1; 
     

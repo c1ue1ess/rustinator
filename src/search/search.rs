@@ -10,7 +10,7 @@ use crate::chess::movegen;
 use crate::search::eval;
 use crate::search::{ TTable, TEntry, NodeType };
 
-const TIME_LIM_SEC: u64 = 10;
+const TIME_LIM_SEC: u64 = 5;
 
 pub struct Search {
     pub board: Board,
@@ -21,10 +21,15 @@ pub fn iterative_deepening_search(mut search: Search, tt: &mut TTable) -> Option
     let start_time = Instant::now();    
     let mut best_score = i32::MIN;
     let mut best_move: Option<Move> = None;
-
-    for depth in 1..20 {
+    
+    let mut depth = 0;
+    
+    loop {
+        if Instant::now().duration_since(start_time) >= Duration::from_secs(TIME_LIM_SEC) {
+            break;
+        }
+        depth += 1;
         let (curr_score, curr_move) = root_search(&mut search, depth, &start_time, tt);
-
         if curr_score > best_score {
             best_score = curr_score;
             best_move = curr_move;
@@ -71,9 +76,12 @@ pub fn root_search(search: &mut Search, depth: usize, start_time: &Instant, tt: 
 }
 
 fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32, tt: &mut TTable) -> i32{
-    if let Some(hash) = tt.get(b.hash, depth as u8) {
+    //dbg!(b.hash);
+    
+    if let Some(hash) = tt.get(b.hash, depth as u8, alpha, beta) {
+        // println!("matched hash {hash}");
         return hash;
-    }
+    } 
     
     if depth == 0 { 
         //dbg!(depth);
@@ -85,7 +93,8 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
     let mut score;
     let moves = movegen::gen_moves(b);
     
-    let mut checkmate = true;
+    let mut no_moves = true;
+    let mut node_type = NodeType::Alpha;
     
     for m in moves {
         b.make(&m, tt);
@@ -94,37 +103,34 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
             b.unmake(&m, tt);
             continue;
         } else {
-            checkmate = false;
+            no_moves = false;
         }
-        
-        // score = match tt.get(b.hash) {
-        //     Some(score) => -score,
-        //     None => {
-        //         score = negamax(b, &m, -beta, -alpha, depth-1, -player, tt);
-        //         tt.insert(TEntry::new(b.hash, depth as u8, score));
-        //         -score
-        //     }
-        // };
 
         score = -negamax(b, &m, -beta, -alpha, depth-1, -player, tt);
+        b.unmake(&m, tt);
         
         if score >= beta {
             tt.insert(TEntry::new(b.hash, depth as u8, beta, NodeType::Beta));
-            b.unmake(&m, tt);
             return beta;
         }
         
         if score > alpha {
+            node_type = NodeType::Pv;
             alpha = score;
         }
-        b.unmake(&m, tt);
     }
     
-    if checkmate {
-        tt.insert(TEntry::new(b.hash, depth as u8, alpha, NodeType::Alpha));
-        -eval::CHECKMATE * depth as i32
+    if no_moves {
+        // if checkmate/stalemate
+        if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &(b.colour)) > 0 {
+            tt.insert(TEntry::new(b.hash, depth as u8, -eval::CHECKMATE * depth as i32, NodeType::Alpha));
+            -eval::CHECKMATE * depth as i32
+        } else {
+            tt.insert(TEntry::new(b.hash, depth as u8, 0, NodeType::Alpha));
+            0
+        }
     } else {
-        tt.insert(TEntry::new(b.hash, depth as u8, alpha, NodeType::Alpha));
+        tt.insert(TEntry::new(b.hash, depth as u8, alpha, node_type));
         alpha
     }
 }

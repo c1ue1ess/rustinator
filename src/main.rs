@@ -21,7 +21,9 @@ fn main() {
 
 
 fn debug() {
-    
+    let mut b = Board::new(); 
+    println!("single thread = {}", search::perft::perft(&mut b, 6));
+    return;
     // let b = crate::chess::Board::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
     // dbg!(b);
@@ -51,7 +53,8 @@ fn debug() {
         }
     }
 
-    // search::root_search(search::Search { board, prev_moves }, 6, &mut tt);
+    
+    search::iterative_deepening_search(search::Search { board, prev_moves }, &mut tt);
 
     // for m in movegen::gen_moves(&board) {
     //     board.make(&m);

@@ -3,7 +3,7 @@ use crate::chess::moves::{Move, MoveType};
 use crate::chess::*;
 
 pub fn gen_moves(b: &Board) -> Vec<Move> {
-    let mut moves = Vec::new();
+    let mut moves = Vec::with_capacity(300);
     all_attk(&mut moves, b);
 
     // sort attacks by most valuable capture

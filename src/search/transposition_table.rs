@@ -45,12 +45,28 @@ impl TTable {
         zorbist_array
     }
 
-    pub fn get(&self, hash: u64, curr_depth: u8) -> Option<i32> {
+    pub fn get(&self, hash: u64, curr_depth: u8, alpha: i32, beta: i32) -> Option<i32> {
         let entry = self.ttable[(hash & TTABLE_INDEX_MASK) as usize]; 
-        if entry.hash == hash && entry.depth >= curr_depth {
-            Some(entry.score)
-        } else {
-            None
+        if entry.hash != hash || entry.depth < curr_depth {
+            return None
+        }
+        
+        match entry.node_type {
+            NodeType::Pv => Some(entry.score),
+            NodeType::Alpha => {
+                if entry.score <= alpha{
+                    Some(alpha)
+                } else {
+                    None
+                }
+            }
+            NodeType::Beta => {
+                if entry.score >= beta{
+                    Some(beta)
+                } else {
+                    None
+                }
+            }
         }
     }
 

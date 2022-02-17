@@ -22,7 +22,7 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
         alpha = eval;
     }
 
-    let mut captures = Vec::new();
+    let mut captures = Vec::with_capacity(300);
     movegen::all_attk(&mut captures, b);
     
     let mut checkmate = true;
@@ -71,12 +71,12 @@ pub fn evaluate(b: &Board, _m: &Move, player: i32) -> i32 {
 }
 
 fn mat_balance(b: &Board) -> i32 {	
-	let pawns = PAWN*(b.pieces[0].count_ones() as i32 - b.pieces[1].count_ones() as i32);
-	let knights = KNIGHT*(b.pieces[2].count_ones() as i32 - b.pieces[3].count_ones() as i32);
-	let rooks = ROOK*(b.pieces[4].count_ones() as i32 - b.pieces[5].count_ones() as i32);
-	let bishops = BISHOP*(b.pieces[6].count_ones() as i32 - b.pieces[7].count_ones() as i32);
-	let queens = QUEEN*(b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
-	let kings = KING*(b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
+	let pawns   = PAWN * (b.pieces[0].count_ones() as i32 - b.pieces[1].count_ones() as i32);
+	let knights = KNIGHT * (b.pieces[2].count_ones() as i32 - b.pieces[3].count_ones() as i32);
+	let rooks   = ROOK * (b.pieces[4].count_ones() as i32 - b.pieces[5].count_ones() as i32);
+	let bishops = BISHOP * (b.pieces[6].count_ones() as i32 - b.pieces[7].count_ones() as i32);
+	let queens  = QUEEN * (b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
+	let kings   = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
 
 	pawns + knights + rooks + bishops + queens + kings
 }
