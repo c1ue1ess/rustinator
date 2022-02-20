@@ -47,6 +47,7 @@ impl TTable {
 
     pub fn get(&self, hash: u64, curr_depth: u8, alpha: i32, beta: i32) -> Option<i32> {
         let entry = self.ttable[(hash & TTABLE_INDEX_MASK) as usize]; 
+        
         if entry.hash != hash || entry.depth < curr_depth {
             return None
         }
@@ -100,3 +101,5 @@ impl TEntry {
         TEntry { hash, depth, score, node_type }
     }
 }
+
+
