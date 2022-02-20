@@ -1,6 +1,7 @@
+use crate::chess::*;
 use crate::chess::board::Board;
 use crate::chess::moves::{Move, MoveType};
-use crate::chess::*;
+use crate::search::TTable;
 
 pub fn gen_moves(b: &Board) -> Vec<Move> {
     let mut moves = Vec::with_capacity(300);

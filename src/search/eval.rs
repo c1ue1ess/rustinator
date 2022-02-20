@@ -7,10 +7,171 @@ const KNIGHT: i32 = 350;
 const ROOK: i32 = 525;
 const BISHOP: i32 = 325;
 const QUEEN: i32 = 1000;
-const KING: i32 = 1000000;
+const KING: i32 = 25000;
 
 pub const CHECKMATE: i32 = 10000000;
 
+
+// piece tables based off of https://www.chessprogramming.org/Simplified_Evaluation_Function as i know nothing about chess
+
+const WPAWN_PT: [i32; 64] = [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0
+];
+const BPAWN_PT: [i32; 64] = [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    5, 10, 10,-20,-20, 10, 10,  5,
+    5, -5,-10,  0,  0,-10, -5,  5,
+    0,  0,  0, 20, 20,  0,  0,  0,
+    5,  5, 10, 25, 25, 10,  5,  5,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    0,  0,  0,  0,  0,  0,  0,  0,
+];
+
+const WKNIGHT_PT: [i32; 64] = [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50,
+];
+const BKNIGHT_PT: [i32; 64] = [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50,
+];
+
+const WROOK_PT: [i32; 64] = [
+    0,  0,  0,  0,  0,  0,  0,  0,
+    5, 10, 10, 10, 10, 10, 10,  5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+   -5,  0,  0,  0,  0,  0,  0, -5,
+    0,  0,  0,  5,  5,  0,  0,  0  
+];
+const BROOK_PT: [i32; 64] = [
+    0,  0,  0,  5,  5,  0,  0,  0,  
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    5, 10, 10, 10, 10, 10, 10,  5,
+    0,  0,  0,  0,  0,  0,  0,  0,
+
+];
+
+const WBISHOP_PT: [i32; 64] = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20,
+];
+const BBISHOP_PT: [i32; 64] = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20,
+
+];
+
+const WQUEEN_PT: [i32; 64] = [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+     -5,  0,  5,  5,  5,  5,  0, -5,
+      0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20
+];
+const BQUEEN_PT: [i32; 64] = [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    0,  0,  5,  5,  5,  5,  0, -5,
+    -5,  0,  5,  5,  5,  5,  0, -5,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20,
+];
+
+const WKING_MID_PT: [i32; 64] = [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20,
+];
+const BKING_MID_PT: [i32; 64] = [
+    20, 30, 10,  0,  0, 10, 30, 20,
+    20, 20,  0,  0,  0,  0, 20, 20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+];
+
+const WKING_END_PT: [i32; 64] = [
+    -50,-40,-30,-20,-20,-30,-40,-50,
+    -30,-20,-10,  0,  0,-10,-20,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-30,  0,  0,  0,  0,-30,-30,
+    -50,-30,-30,-30,-30,-30,-30,-50,
+];
+const BKING_END_PT: [i32; 64] = [
+    -50,-30,-30,-30,-30,-30,-30,-50,
+    -30,-30,  0,  0,  0,  0,-30,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-20,-10,  0,  0,-10,-20,-30,
+    -50,-40,-30,-20,-20,-30,-40,-50,
+];
+
+const PST: [[i32; 64]; 14] = [
+    WPAWN_PT, BPAWN_PT, 
+    WKNIGHT_PT, BKNIGHT_PT, 
+    WROOK_PT, BROOK_PT, 
+    WBISHOP_PT, BBISHOP_PT,
+    WQUEEN_PT, BQUEEN_PT, 
+    WKING_MID_PT, BKING_MID_PT,
+    WKING_END_PT, BKING_END_PT
+];
 
 pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32) -> i32 {
     let eval = evaluate(b, m, player);
@@ -24,8 +185,10 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
 
     let mut captures = Vec::with_capacity(300);
     movegen::all_attk(&mut captures, b);
+    // sort captures
+    captures.sort_unstable_by(|a, b| a.xpiece.cmp(&b.xpiece).reverse());
     
-    let mut checkmate = true;
+    let mut no_moves = true;
     
     let mut score;
     for cap in captures {
@@ -35,39 +198,34 @@ pub fn quiesce( b: &mut Board, m: &Move, mut alpha: i32, beta: i32, player: i32)
             b.unmake_no_hashing(&cap);
             continue;
         } else { 
-            checkmate = false
+            no_moves = false
         }
         
         score = -quiesce(b, &cap, -beta, -alpha, -player);
+        b.unmake_no_hashing(&cap);
         
         if score >= beta {
-            b.unmake_no_hashing(&cap);
             return beta;
         }
         if score > alpha {
             alpha = score;
-        }
-        
-        b.unmake_no_hashing(&cap);
+        }   
     }
 
-    if checkmate {
-        -CHECKMATE
+    if no_moves {
+        //if checkmate or stalemate
+        if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &(b.colour)) > 0 {
+            -CHECKMATE
+        } else {
+            0
+        }
     } else {
         alpha
     }
 }
 
 pub fn evaluate(b: &Board, _m: &Move, player: i32) -> i32 {
-    let mut eval = 0;
-    eval += mat_balance(b);
-	
-	eval *= player;
-	
-	// mobility
-    eval += movegen::gen_moves(b).len() as i32 * 50;
-
-    eval 
+    (mat_balance(b) + pos_balance(b)) * player //+ movegen::gen_moves(b).len() as i32 * 25
 }
 
 fn mat_balance(b: &Board) -> i32 {	
@@ -81,41 +239,27 @@ fn mat_balance(b: &Board) -> i32 {
 	pawns + knights + rooks + bishops + queens + kings
 }
 
-#[allow(dead_code)]
 fn pos_balance(b: &Board) -> i32 {
-    let mut balance = 0;
+    let mut pos = 0;
+    
+    // For now only king midgame pst is used until i decide when endgame starts
+    for p in 0..6 {
+        //white
+        let mut pieces = b.pieces[p*2];
+        while pieces > 0 {
+            let sq = movegen::bitscn_fw(&pieces);
+            pos += PST[p][sq];
+            pieces &= pieces-1;
+        }
 
-    const MID: u64 = 0x8181000000;
-	const OUTTER_MID: u64 = 0xB34242B30000;
+        // vs black
+        let mut pieces = b.pieces[p*2+1];
+        while pieces > 0 {
+            let sq = movegen::bitscn_fw(&pieces);
+            pos -= PST[p][sq];
+            pieces &= pieces-1;
+        }
+    }
 
-
-    let mut wp = (b.pieces[0] & MID).count_ones() as i32 * PAWN * 15;
-	let mut bp = (b.pieces[1] & MID).count_ones() as i32 * PAWN * 15;
-	let mut wn = (b.pieces[2] & MID).count_ones() as i32 * KNIGHT * 50;
-	let mut bn = (b.pieces[3] & MID).count_ones() as i32 * KNIGHT * 50;
-	let mut wr = (b.pieces[4] & MID).count_ones() as i32 * ROOK * 25;
-	let mut br = (b.pieces[5] & MID).count_ones() as i32 * ROOK * 25;
-	let mut wb = (b.pieces[6] & MID).count_ones() as i32 * BISHOP * 40;
-	let mut bb = (b.pieces[7] & MID).count_ones() as i32 * BISHOP * 40;
-	let mut wq = (b.pieces[8] & MID).count_ones() as i32 * QUEEN * 50;
-	let mut bq = (b.pieces[9] & MID).count_ones() as i32 * QUEEN * 50;
-	let mut wk = (b.pieces[10] & MID).count_ones() as i32 * KING * 0;
-	let mut bk = (b.pieces[11] & MID).count_ones() as i32 * KING * 0;
-
-	balance += (wp - bp) + (wn - bn) + (wr - br) + (wb - bb) + (wq - bq) + (wk - bk);
-
-	wp = (b.pieces[0] & OUTTER_MID).count_ones() as i32 * PAWN * 30;
-	bp = (b.pieces[1] & OUTTER_MID).count_ones() as i32 * PAWN * 30;
-	wn = (b.pieces[2] & OUTTER_MID).count_ones() as i32 * KNIGHT * 50;
-	bn = (b.pieces[3] & OUTTER_MID).count_ones() as i32 * KNIGHT * 50;
-	wr = (b.pieces[4] & OUTTER_MID).count_ones() as i32 * ROOK * 40;
-	br = (b.pieces[5] & OUTTER_MID).count_ones() as i32 * ROOK * 40;
-	wb = (b.pieces[6] & OUTTER_MID).count_ones() as i32 * BISHOP * 40;
-	bb = (b.pieces[7] & OUTTER_MID).count_ones() as i32 * BISHOP * 40;
-	wq = (b.pieces[8] & OUTTER_MID).count_ones() as i32 * QUEEN * 50;
-	bq = (b.pieces[9] & OUTTER_MID).count_ones() as i32 * QUEEN * 50;
-	wk = (b.pieces[10] & OUTTER_MID).count_ones() as i32 * KING * 5;
-	bk = (b.pieces[11] & OUTTER_MID).count_ones() as i32 * KING * 5;
-
-	balance + (wp - bp) + (wn - bn) + (wr - br) + (wb - bb) + (wq - bq) + (wk - bk)
+    pos
 }

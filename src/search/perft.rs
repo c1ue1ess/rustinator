@@ -1,11 +1,10 @@
+#![allow(unused)]
 use std::sync::{Arc, Mutex};
-#[allow(dead_code)]
 use threadpool::ThreadPool;
 
 use crate::chess::movegen;
 use crate::chess::moves::{Move, MoveType};
 use crate::chess::Board;
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PerftCounter {
     moves: usize,
@@ -17,7 +16,6 @@ pub struct PerftCounter {
     check: usize,
 }
 
-#[allow(dead_code)]
 impl PerftCounter {
     pub fn new() -> PerftCounter {
         PerftCounter {
@@ -63,7 +61,6 @@ impl PerftCounter {
     }
 }
 
-#[allow(dead_code)]
 pub fn perft_counter(
     b: &mut Board,
     depth: usize,
@@ -91,7 +88,6 @@ pub fn perft_counter(
         b.unmake_no_hashing(&m);
     }
 }
-#[allow(dead_code)]
 pub fn perft(b: &mut Board, depth: usize) -> usize {
     if depth == 0 {
             return 1;
@@ -114,7 +110,6 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     move_count
 }
 
-#[allow(dead_code)]
 pub fn perft_multi_thread(b: &Board, depth: usize) {
     let moves = movegen::gen_moves(&b);
     let pool = ThreadPool::new(moves.len());

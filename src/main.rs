@@ -21,17 +21,17 @@ fn main() {
 
 
 fn debug() {
-    let mut b = Board::new(); 
-    println!("single thread = {}", search::perft::perft(&mut b, 6));
-    return;
+    // let mut b = Board::new(); 
+    // println!("single thread = {}", search::perft::perft(&mut b, 6));
+    // return;
     // let b = crate::chess::Board::new_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
     // dbg!(b);
     // println!("{}", b);
 
-    // let f = fs::read("target/debug/last_pos.txt").unwrap();
-    let buffer = crate::uci::WHITE_OPENS[0];
-    // let buffer = String::from_utf8_lossy(&f);
+    let f = fs::read("target/debug/last_pos.txt").unwrap();
+    // let buffer = crate::uci::WHITE_OPENS[0];
+    let buffer = String::from_utf8_lossy(&f);
 
 
     let mut prev_moves: HashMap<[u64; 12], usize> = HashMap::new();
@@ -54,7 +54,7 @@ fn debug() {
     }
 
     
-    search::iterative_deepening_search(search::Search { board, prev_moves }, &mut tt);
+    search::iterative_deepening_search(search::Search { board, prev_moves }, &mut tt).unwrap();
 
     // for m in movegen::gen_moves(&board) {
     //     board.make(&m);

@@ -65,7 +65,7 @@ fn position(buffer: &str, tt: &TTable) -> Search {
     }
 
     // write last post to file if needed
-    // std::fs::write("last_pos.txt", buffer.as_bytes()).unwrap();
+    std::fs::write("last_pos.txt", buffer.as_bytes()).unwrap();
 
     Search { board, prev_moves }
 }
@@ -79,7 +79,6 @@ fn go(buffer: &str, s: Option<Search>, use_book: bool, tt: &mut TTable) -> bool 
     if more_book { return true; }
 
     let s = s.expect("No board found in go");
-    let depth = 6;
     let best_move = search::iterative_deepening_search(s, tt);
     println!("bestmove {}", best_move.unwrap().as_uci_string());
 

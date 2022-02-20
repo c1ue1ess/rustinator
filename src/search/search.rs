@@ -10,7 +10,8 @@ use crate::chess::movegen;
 use crate::search::eval;
 use crate::search::{ TTable, TEntry, NodeType };
 
-const TIME_LIM_SEC: u64 = 5;
+const TIME_LIM_SEC: u64 = 3;
+const MAX_SEARCH_DEPTH: usize = 20;
 
 pub struct Search {
     pub board: Board,
@@ -24,12 +25,13 @@ pub fn iterative_deepening_search(mut search: Search, tt: &mut TTable) -> Option
     
     let mut depth = 0;
     
-    loop {
+    for depth in 1..MAX_SEARCH_DEPTH {
         if Instant::now().duration_since(start_time) >= Duration::from_secs(TIME_LIM_SEC) {
             break;
         }
-        depth += 1;
+        
         let (curr_score, curr_move) = root_search(&mut search, depth, &start_time, tt);
+        
         if curr_score > best_score {
             best_score = curr_score;
             best_move = curr_move;
@@ -59,7 +61,7 @@ pub fn root_search(search: &mut Search, depth: usize, start_time: &Instant, tt: 
                 continue;
         }
 
-        score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player, tt);
+        score = -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player, tt, &start_time);
     
         if score > best_score {
             if search.prev_moves.get(&search.board.pieces).unwrap_or(&0) < &2{
@@ -75,12 +77,18 @@ pub fn root_search(search: &mut Search, depth: usize, start_time: &Instant, tt: 
     
 }
 
-fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32, tt: &mut TTable) -> i32{
+fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, 
+    depth: usize, player: i32, tt: &mut TTable, start_time: &Instant) -> i32{
     //dbg!(b.hash);
     
-    if let Some(hash) = tt.get(b.hash, depth as u8, alpha, beta) {
-        // println!("matched hash {hash}");
-        return hash;
+    if let Some(hash_score) = tt.get(b.hash, depth as u8, alpha, beta) {
+        // account for the change in depth of checkmate within transposition table
+        if hash_score <= -eval::CHECKMATE {
+            let check_depth = hash_score / -eval::CHECKMATE;
+            return -eval::CHECKMATE * (check_depth - depth as i32);
+        } else {
+            return hash_score;
+        }
     } 
     
     if depth == 0 { 
@@ -97,6 +105,10 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
     let mut node_type = NodeType::Alpha;
     
     for m in moves {
+        if Instant::now().duration_since(*start_time) >= Duration::from_secs(TIME_LIM_SEC) {
+            break;
+        }
+
         b.make(&m, tt);
         
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
@@ -106,7 +118,7 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
             no_moves = false;
         }
 
-        score = -negamax(b, &m, -beta, -alpha, depth-1, -player, tt);
+        score = -negamax(b, &m, -beta, -alpha, depth-1, -player, tt, start_time);
         b.unmake(&m, tt);
         
         if score >= beta {
@@ -123,10 +135,12 @@ fn negamax(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, pla
     if no_moves {
         // if checkmate/stalemate
         if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &(b.colour)) > 0 {
-            tt.insert(TEntry::new(b.hash, depth as u8, -eval::CHECKMATE * depth as i32, NodeType::Alpha));
+            //println!("info string checkmate found at {}", depth);
+            tt.insert(TEntry::new(b.hash, depth as u8, -eval::CHECKMATE * depth as i32, NodeType::Pv));
             -eval::CHECKMATE * depth as i32
         } else {
             tt.insert(TEntry::new(b.hash, depth as u8, 0, NodeType::Alpha));
+            //println!("info string stalemate found at {}", depth);
             0
         }
     } else {
