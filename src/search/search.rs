@@ -11,10 +11,6 @@ use crate::search::eval;
 use crate::search::{NodeType, TEntry, TTable};
 
 const TIME_LIM: u64 = 5;
-// time limit the iterative deepening search will start searches untill
-const BEGIN_SEARCH_TIMEOUT: u64 = 5;
-// time limit the negamax + root search functions will run untill
-const END_SEARCH_TIMEOUT: u64 = 15;
 const MAX_SEARCH_DEPTH: usize = 20;
 
 pub struct Search {
@@ -82,21 +78,21 @@ impl Search {
                     tt,
                     &start_time,
                 );
+                
                 println!(
                     "info cp {}, depth {} currmove {}",
                     best_score,
                     depth,
                     m.as_uci_string()
                 );
+                
                 best_move = Some(m);
             }
 
             self.board.unmake(&m, tt);
         }
-
-        let mut score;
-        let moves = movegen::gen_moves(&self.board);
-        for m in moves {
+        
+        for m in movegen::gen_moves(&self.board) {
             if Instant::now().duration_since(*start_time) >= Duration::from_secs(TIME_LIM) {
                 return (best_score, best_move);
             }
@@ -113,7 +109,7 @@ impl Search {
                 continue;
             }
 
-            score = -negamax(
+            let score = -negamax(
                 &mut self.board,
                 i32::MIN + 1,
                 i32::MAX,
@@ -124,11 +120,11 @@ impl Search {
                 &start_time,
             );
 
-            //println!("info cp {}, depth {} currmove {}", score, depth, m.as_uci_string());
             if score > best_score {
                 if self.prev_moves.get(&self.board.pieces).unwrap_or(&0) < &2 {
                     best_move = Some(m);
                     best_score = score;
+                    
                     println!(
                         "info cp {}, depth {} currmove {}",
                         best_score,
@@ -140,6 +136,7 @@ impl Search {
 
             self.board.unmake(&m, tt);
         }
+        
         (best_score, best_move)
     }
 }
@@ -154,31 +151,23 @@ fn negamax(
     tt: &mut TTable,
     start_time: &Instant,
 ) -> i32 {
-    //dbg!(b.hash);
-
     if let Some(hash_score) = tt.get(b.hash, depth as u8, mate_dist, alpha, beta) {
-        // account for the change in depth of checkmate within transposition table
-        //println!("info string hash move");
         return hash_score;
     }
 
     if depth == 0 {
-        //dbg!(depth);
         let eval = eval::quiesce(b, alpha, beta, player);
-        // let eval = eval::evaluate(b, player);
-        //tt.insert(TEntry::new(b.hash, None, 0, eval, NodeType::Pv));
+        tt.insert(TEntry::new(b.hash, None, 0, eval, NodeType::Pv));
         return eval;
     }
 
-    let mut score;
-    let moves = movegen::gen_moves(b);
-
+    
+    let mut best_move = None;
     let mut no_moves = true;
     let mut checkmate = false;
     let mut node_type = NodeType::Alpha;
-    let mut best_move = None;
-
-    for m in moves {
+    
+    for m in movegen::gen_moves(b) {
         if Instant::now().duration_since(*start_time) >= Duration::from_secs(TIME_LIM) {
             break;
         }
@@ -198,7 +187,7 @@ fn negamax(
             no_moves = false;
         }
 
-        score = -negamax(
+        let score = -negamax(
             b,
             -beta,
             -alpha,
@@ -208,6 +197,7 @@ fn negamax(
             tt,
             start_time,
         );
+        
         b.unmake(&m, tt);
 
         if score >= beta {
@@ -222,8 +212,8 @@ fn negamax(
         }
     }
 
+    // if checkmate/stalemate
     if no_moves {
-        // if checkmate/stalemate
         if checkmate {
             tt.insert(TEntry::new(
                 b.hash,
@@ -232,10 +222,18 @@ fn negamax(
                 eval::CHECKMATE * mate_dist,
                 NodeType::Pv,
             ));
+            
             eval::CHECKMATE * mate_dist
+        
         } else {
-            tt.insert(TEntry::new(b.hash, None, depth as u8, 0, NodeType::Pv));
-            println!("info string stalemate found at {}", depth);
+            tt.insert(TEntry::new(
+                b.hash,
+                None, 
+                depth as u8, 
+                0, 
+                NodeType::Pv
+            ));
+        
             0
         }
     } else {
@@ -246,214 +244,6 @@ fn negamax(
             alpha,
             node_type,
         ));
-        alpha
-    }
-}
-
-// WORK IN PROGRESS
-pub fn root_search_mt(mut search: Search, depth: usize) -> Move {
-    if depth == 0 {
-        println!("what");
-    }
-
-    let moves = movegen::gen_moves(&search.board);
-    let pool = ThreadPool::new(moves.len());
-
-    let player = if search.board.colour == 0 { 1 } else { -1 };
-    let mvs: Arc<Mutex<(Option<Move>, i32, Board)>> =
-        Arc::new(Mutex::new((None, i32::MIN, search.board)));
-    let prev_moves = Arc::new(RwLock::new(search.prev_moves));
-
-    let moves = moves;
-
-    for m in moves {
-        let mv = Arc::clone(&mvs);
-        let prev_m = Arc::clone(&prev_moves);
-
-        pool.execute(move || {
-            search.board.make_no_hashing(&m);
-
-            if movegen::check_check(
-                &search.board,
-                &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]),
-                &(1 - search.board.colour),
-            ) > 0
-            {
-                search.board.unmake_no_hashing(&m);
-                return;
-            }
-
-            let score = 0; // -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
-
-            let mut best_m = mv.lock().unwrap();
-
-            if score > best_m.1
-                && *prev_m
-                    .read()
-                    .unwrap()
-                    .get(&search.board.pieces)
-                    .unwrap_or(&0)
-                    < 2
-            {
-                best_m.0 = Some(m);
-                best_m.1 = score;
-            }
-
-            search.board.unmake_no_hashing(&m);
-        });
-    }
-
-    pool.join();
-    let best_move = mvs.lock().unwrap().0.unwrap();
-
-    best_move
-}
-
-pub fn root_search_mtpvs(mut search: Search, depth: usize) -> Move {
-    if depth == 0 {
-        println!("what");
-    }
-
-    let moves = movegen::gen_moves(&search.board);
-    let pool = ThreadPool::new(moves.len());
-
-    let player = if search.board.colour == 0 { 1 } else { -1 };
-    let mvs: Arc<Mutex<(Option<Move>, i32, Board)>> =
-        Arc::new(Mutex::new((None, i32::MIN, search.board)));
-    let prev_moves = Arc::new(RwLock::new(search.prev_moves));
-
-    let moves = moves;
-    //let pv = search_pv(&mut search.board, &moves[0], i32::MIN+1, i32::MAX, depth, player);
-
-    for m in moves {
-        let mv = Arc::clone(&mvs);
-        let prev_m = Arc::clone(&prev_moves);
-
-        pool.execute(move || {
-            search.board.make_no_hashing(&m);
-
-            if movegen::check_check(
-                &search.board,
-                &movegen::bitscn_fw(&search.board.pieces[11 - search.board.colour]),
-                &(1 - search.board.colour),
-            ) > 0
-            {
-                search.board.unmake_no_hashing(&m);
-                return;
-            }
-
-            let score = 0; // -negamax(&mut search.board, &m, i32::MIN+1, i32::MAX, depth-1, -player);
-
-            let mut best_m = mv.lock().unwrap();
-            if score > best_m.1
-                && *prev_m
-                    .read()
-                    .unwrap()
-                    .get(&search.board.pieces)
-                    .unwrap_or(&0)
-                    < 2
-            {
-                best_m.0 = Some(m);
-                best_m.1 = score;
-            }
-            search.board.unmake_no_hashing(&m);
-        });
-    }
-
-    pool.join();
-    let best_move = mvs.lock().unwrap().0.unwrap();
-
-    best_move
-}
-
-fn search_pv(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32 {
-    if depth == 0 {
-        let eval = eval::quiesce(b, alpha, beta, player);
-        return eval;
-    }
-
-    let moves = movegen::gen_moves(b);
-    let mut checkmate = true;
-
-    for m in moves {
-        b.make_no_hashing(&m);
-        if movegen::check_check(
-            b,
-            &movegen::bitscn_fw(&b.pieces[11 - b.colour]),
-            &(1 - b.colour),
-        ) > 0
-        {
-            b.unmake_no_hashing(&m);
-            continue;
-        } else {
-            checkmate = false;
-        }
-
-        let score = -search_pv(b, &m, -beta, -alpha, depth - 1, -player);
-
-        if score >= beta {
-            b.unmake_no_hashing(&m);
-            return beta;
-        }
-
-        if score > alpha {
-            alpha = score;
-        }
-        b.unmake_no_hashing(&m);
-
-        if checkmate {
-            return eval::CHECKMATE * depth as i32;
-        } else {
-            return alpha;
-        }
-    }
-
-    if checkmate {
-        eval::CHECKMATE * depth as i32
-    } else {
-        alpha
-    }
-}
-
-fn pvs(b: &mut Board, m: &Move, mut alpha: i32, beta: i32, depth: usize, player: i32) -> i32 {
-    if depth == 0 {
-        let eval = eval::quiesce(b, alpha, beta, player);
-        return eval;
-    }
-
-    let moves = movegen::gen_moves(b);
-    let mut checkmate = true;
-
-    for m in moves {
-        b.make_no_hashing(&m);
-        if movegen::check_check(
-            b,
-            &movegen::bitscn_fw(&b.pieces[11 - b.colour]),
-            &(1 - b.colour),
-        ) > 0
-        {
-            b.unmake_no_hashing(&m);
-            continue;
-        } else {
-            checkmate = false;
-        }
-
-        let score = -pvs(b, &m, -beta, -alpha, depth - 1, -player);
-
-        if score >= beta {
-            b.unmake_no_hashing(&m);
-            return beta;
-        }
-
-        if score > alpha {
-            alpha = score;
-        }
-        b.unmake_no_hashing(&m);
-    }
-
-    if checkmate {
-        eval::CHECKMATE * depth as i32
-    } else {
         alpha
     }
 }

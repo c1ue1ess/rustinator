@@ -1,6 +1,7 @@
 use crate::chess::movegen;
 use crate::chess::Board;
 use crate::chess::Move;
+use crate::chess::moves::MoveType;
 
 const PAWN: i32 = 100;
 const KNIGHT: i32 = 350;
@@ -111,6 +112,24 @@ const PST: [[i32; 64]; 14] = [
     BKING_END_PT,
 ];
 
+const CAPTURE_BONUS: i32 = 15;
+
+const PAWN_MOBILITY: i32 = 0;
+const KNIGHT_MOBILITY: i32 = 20;
+const ROOK_MOBILITY: i32 = 10;
+const BISHOP_MOBILITY: i32 = 10;
+const QUEEN_MOBILITY: i32 = 20;
+const KING_MOBILITY: i32 = 5;
+
+const PIECE_MOBILITY: [i32; 12] = [
+    PAWN_MOBILITY, PAWN_MOBILITY,
+    KNIGHT_MOBILITY, KNIGHT_MOBILITY,
+    ROOK_MOBILITY, ROOK_MOBILITY,
+    BISHOP_MOBILITY, BISHOP_MOBILITY,
+    QUEEN_MOBILITY, QUEEN_MOBILITY,
+    KING_MOBILITY, KING_MOBILITY
+];
+
 pub fn quiesce(b: &mut Board, mut alpha: i32, beta: i32, player: i32) -> i32 {
     let eval = evaluate(b, player);
 
@@ -175,8 +194,9 @@ pub fn quiesce(b: &mut Board, mut alpha: i32, beta: i32, player: i32) -> i32 {
 }
 
 pub fn evaluate(b: &Board, player: i32) -> i32 {
-    let mut eval = (mat_balance(b) + pos_balance(b)); // + movegen::gen_moves(b).len() as i32 * 50;
-    eval * player
+    let mut eval = (mat_balance(b) + pos_balance(b)); 
+    eval *= player;
+    eval + mobility(b)
 }
 
 fn mat_balance(b: &Board) -> i32 {
@@ -187,8 +207,6 @@ fn mat_balance(b: &Board) -> i32 {
     let queens = QUEEN * (b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
     let kings = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
 
-    // println!("pawns {} knights {} rooks {} bishops {} queens {} kings {}",
-    //     pawns/PAWN, knights/KNIGHT, rooks/ROOK, bishops/BISHOP, queens/QUEEN, kings/KING);
     pawns + knights + rooks + bishops + queens + kings
 }
 
@@ -223,6 +241,17 @@ fn pos_balance(b: &Board) -> i32 {
     }
 
     pos
+}
+
+fn mobility(b: &Board) -> i32 {
+    let mut mob = 0;
+
+    for m in movegen::gen_moves(b) {
+        mob += PIECE_MOBILITY[m.piece];
+        mob += if m.move_type ==  MoveType::Capture { CAPTURE_BONUS } else { 0 };
+    }
+
+    mob
 }
 
 // #[test]

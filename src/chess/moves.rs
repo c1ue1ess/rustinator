@@ -3,7 +3,7 @@ use crate::chess::Board;
 use crate::chess::movegen;
 use crate::chess::SQ_NAMES;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MoveType {
     Quiet,
     DoublePush,

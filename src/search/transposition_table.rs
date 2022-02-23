@@ -57,7 +57,10 @@ impl TTable {
         }
 
         if entry.score <= eval::CHECKMATE {
+            // adjust the stored checkmate score for the current mate distance
             return Some(entry.score - (entry.score - mate_dist*eval::CHECKMATE));
+        } else if entry.score >= -eval::CHECKMATE {
+            return Some(entry.score - (entry.score + mate_dist*eval::CHECKMATE));
         }
         
         match entry.node_type {
@@ -80,10 +83,6 @@ impl TTable {
     }
 
     pub fn insert(&mut self, entry: TEntry) {
-        //if new entry's depth is of a higher depth or is newer
-        //if entry.depth >= self.ttable[(entry.hash & TTABLE_INDEX_MASK) as usize].depth {
-            //}
-        
         // always replace
         self.ttable[(entry.hash & TTABLE_INDEX_MASK) as usize] = entry;
     }

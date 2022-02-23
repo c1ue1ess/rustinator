@@ -3,7 +3,7 @@ use std::fmt;
 use crate::chess::moves::{Move, MoveType};
 use crate::chess::SQUARES;
 use crate::chess::SQ_NAMES;
-use crate::search::transposition_table::{TTable};
+use crate::search::transposition_table::TTable;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Board {
@@ -34,18 +34,18 @@ impl Board {
             hash: 0,
         };
 
-        b.pieces[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; //wp 0
-        b.pieces[2] = 0b0000000000000000000000000000000000000000000000000000000001000010; //wn 2
-        b.pieces[4] = 0b0000000000000000000000000000000000000000000000000000000010000001; //wr 4
-        b.pieces[6] = 0b0000000000000000000000000000000000000000000000000000000000100100; //wb 6
-        b.pieces[8] = 0b0000000000000000000000000000000000000000000000000000000000001000; //wq 8
+        b.pieces[0] =  0b0000000000000000000000000000000000000000000000001111111100000000; //wp 0
+        b.pieces[2] =  0b0000000000000000000000000000000000000000000000000000000001000010; //wn 2
+        b.pieces[4] =  0b0000000000000000000000000000000000000000000000000000000010000001; //wr 4
+        b.pieces[6] =  0b0000000000000000000000000000000000000000000000000000000000100100; //wb 6
+        b.pieces[8] =  0b0000000000000000000000000000000000000000000000000000000000001000; //wq 8
         b.pieces[10] = 0b0000000000000000000000000000000000000000000000000000000000010000; //wk 10
 
-        b.pieces[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; //bp 1
-        b.pieces[3] = 0b0100001000000000000000000000000000000000000000000000000000000000; //bn 3
-        b.pieces[5] = 0b1000000100000000000000000000000000000000000000000000000000000000; //br 5
-        b.pieces[7] = 0b0010010000000000000000000000000000000000000000000000000000000000; //bb 7
-        b.pieces[9] = 0b0000100000000000000000000000000000000000000000000000000000000000; //bq 9
+        b.pieces[1] =  0b0000000011111111000000000000000000000000000000000000000000000000; //bp 1
+        b.pieces[3] =  0b0100001000000000000000000000000000000000000000000000000000000000; //bn 3
+        b.pieces[5] =  0b1000000100000000000000000000000000000000000000000000000000000000; //br 5
+        b.pieces[7] =  0b0010010000000000000000000000000000000000000000000000000000000000; //bb 7
+        b.pieces[9] =  0b0000100000000000000000000000000000000000000000000000000000000000; //bq 9
         b.pieces[11] = 0b0001000000000000000000000000000000000000000000000000000000000000; //bk 11
 
         // util[0] all white, util[1] all black, util[2] all pieces
@@ -148,24 +148,23 @@ impl Board {
         b.colour = if fen[1].contains("w") { 0 } else { 1 };
 
         match fen[2] {
-            "KQkq" => b.castle_state = 0b1111,
-            "KQk" => b.castle_state = 0b1110,
-            "KQq" => b.castle_state = 0b1101,
-            "KQ" => b.castle_state = 0b1100,
-            "Kkq" => b.castle_state = 0b1011,
-            "Kk" => b.castle_state = 0b1010,
-            "Kq" => b.castle_state = 0b1001,
-            "K" => b.castle_state = 0b1000,
-            "Qkq" => b.castle_state = 0b0111,
-            "Qk" => b.castle_state = 0b0110,
-            "Qq" => b.castle_state = 0b0101,
-            "Q" => b.castle_state = 0b0100,
-            "kq" => b.castle_state = 0b0011,
-            "k" => b.castle_state = 0b0010,
-            "q" => b.castle_state = 0b0001,
-            "-" => b.castle_state = 0b0000,
-
-            _ => b.castle_state = 16,
+            "KQkq"  => b.castle_state = 0b1111,
+            "KQk"   => b.castle_state = 0b1110,
+            "KQq"   => b.castle_state = 0b1101,
+            "KQ"    => b.castle_state = 0b1100,
+            "Kkq"   => b.castle_state = 0b1011,
+            "Kk"    => b.castle_state = 0b1010,
+            "Kq"    => b.castle_state = 0b1001,
+            "K"     => b.castle_state = 0b1000,
+            "Qkq"   => b.castle_state = 0b0111,
+            "Qk"    => b.castle_state = 0b0110,
+            "Qq"    => b.castle_state = 0b0101,
+            "Q"     => b.castle_state = 0b0100,
+            "kq"    => b.castle_state = 0b0011,
+            "k"     => b.castle_state = 0b0010,
+            "q"     => b.castle_state = 0b0001,
+            "-"     => b.castle_state = 0b0000,
+            _       => b.castle_state = 16,
         }
 
         if fen[3].contains("-") {
@@ -678,31 +677,3 @@ impl fmt::Display for Board {
         write!(f, "{}", out)
     }
 }
-
-
-// #[test]
-// fn hash_make_unmake() {
-//     let mut tt = TTable::new();
-//     let mut b = Board::new_with_hash(&tt);
-//     let position = "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 e7e5 d4b5 a7a6 b5d6 f8d6 d1d6 d8f6 d6f6 g8f6 f2f3 d7d5 e4d5 f6d5";
-//     let mut moves = Vec::new();
-
-//     let og = b.hash;
-
-//     for p in position.split(" ") {
-//         let m = Move::new_from_text(p, &b);        
-//         moves.push(m);
-//         println!("{b}\n{m}");
-//         b.make(&m, &tt);
-//     }
-
-//     println!("{}\n{}", b.hash, b);
-
-//     for m in moves.iter().rev() {
-//         b.unmake(&m, &tt);
-//     }
-
-//     println!("{}\n{}", b.hash, b);
-
-//     assert_eq!(og, b.hash)
-// }
