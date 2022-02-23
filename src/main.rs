@@ -2,8 +2,10 @@
 use std::collections::HashMap;
 use std::fs;
 
+use search::Search;
+
 use crate::chess::{ Move, Board };
-use crate::search::{ TTable };
+use crate::search::TTable;
 
 mod chess;
 mod search;
@@ -53,8 +55,11 @@ fn debug() {
         }
     }
 
+    //board.make(&Move::new_from_text("e7e1", &board), &tt);
+    let entry = prev_moves.entry(board.pieces).or_insert(0);
+    *entry += 1;
     
-    search::iterative_deepening_search(search::Search { board, prev_moves }, &mut tt).unwrap();
+    Search::new(board, prev_moves).iterative_deepening_search(&mut tt).unwrap();
 
     // for m in movegen::gen_moves(&board) {
     //     board.make(&m);

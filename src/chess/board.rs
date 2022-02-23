@@ -680,29 +680,29 @@ impl fmt::Display for Board {
 }
 
 
-#[test]
-fn hash_make_unmake() {
-    let mut tt = TTable::new();
-    let mut b = Board::new_with_hash(&tt);
-    let position = "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 e7e5 d4b5 a7a6 b5d6 f8d6 d1d6 d8f6 d6f6 g8f6 f2f3 d7d5 e4d5 f6d5";
-    let mut moves = Vec::new();
+// #[test]
+// fn hash_make_unmake() {
+//     let mut tt = TTable::new();
+//     let mut b = Board::new_with_hash(&tt);
+//     let position = "e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 e7e5 d4b5 a7a6 b5d6 f8d6 d1d6 d8f6 d6f6 g8f6 f2f3 d7d5 e4d5 f6d5";
+//     let mut moves = Vec::new();
 
-    let og = b.hash;
+//     let og = b.hash;
 
-    for p in position.split(" ") {
-        let m = Move::new_from_text(p, &b);        
-        moves.push(m);
-        println!("{b}\n{m}");
-        b.make(&m, &tt);
-    }
+//     for p in position.split(" ") {
+//         let m = Move::new_from_text(p, &b);        
+//         moves.push(m);
+//         println!("{b}\n{m}");
+//         b.make(&m, &tt);
+//     }
 
-    println!("{}\n{}", b.hash, b);
+//     println!("{}\n{}", b.hash, b);
 
-    for m in moves.iter().rev() {
-        b.unmake(&m, &tt);
-    }
+//     for m in moves.iter().rev() {
+//         b.unmake(&m, &tt);
+//     }
 
-    println!("{}\n{}", b.hash, b);
+//     println!("{}\n{}", b.hash, b);
 
-    assert_eq!(og, b.hash)
-}
+//     assert_eq!(og, b.hash)
+// }
