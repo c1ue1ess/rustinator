@@ -4412,9 +4412,7 @@ pub const BLACK_OPENS: [&str; 2200]= [
 pub fn get_opening_move(position: &str) -> bool {
    dbg!(position);
 
-
-    let moves: Vec<&str> = position.split(' ').collect();
-    let mut move_num = moves.len();
+    let mut move_num = position.split(' ').count();
     
     // account for missing "moves" command
     if move_num == 2 {
@@ -4443,7 +4441,7 @@ pub fn get_opening_move(position: &str) -> bool {
     }
 
 
-    let moves: Vec<&str> = opening_move.split(" ").collect();
+    let moves: Vec<&str> = opening_move.split(' ').collect();
     
     for (i, m) in moves.iter().enumerate() {
         if i == move_num {

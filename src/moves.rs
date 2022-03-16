@@ -68,7 +68,7 @@ ep: {}    xpiece: {}    castle rights: {}    promo piece: {}",
 
 impl Move {
     pub fn new_quiet(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
+            piece: usize, ep: u8, board: &Board) -> Move {
         
         Move { 
             from, 
@@ -78,14 +78,14 @@ impl Move {
 
             ep, 
             xpiece: 12, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece: 12,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }
     }
 
     pub fn new_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
+            piece: usize, xpiece: usize, ep: u8, board: &Board) -> Move {
         
         Move { 
             from, 
@@ -96,14 +96,14 @@ impl Move {
             ep, 
             
             xpiece, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece: 12,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }    
     }
 
     pub fn new_double_push(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
+            piece: usize, ep: u8, board: &Board) -> Move {
         Move { 
             from, 
             to, 
@@ -112,14 +112,14 @@ impl Move {
 
             ep, 
             xpiece: 12, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece: 12,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }                
     }
 
     pub fn new_ep_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
+            piece: usize, xpiece: usize, ep: u8, board: &Board) -> Move {
         Move { 
             from, 
             to, 
@@ -128,13 +128,13 @@ impl Move {
             
             ep, 
             xpiece, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece: 12,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }
     }
     pub fn new_promo(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, promo_piece: usize) -> Move {
+            piece: usize, ep: u8, board: &Board, promo_piece: usize) -> Move {
 
         Move { 
             from, 
@@ -144,14 +144,14 @@ impl Move {
 
             ep, 
             xpiece: 12, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }
     }
     
     pub fn new_promo_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, promo_piece: usize) -> Move {
+            piece: usize, xpiece: usize, ep: u8, board: &Board, promo_piece: usize) -> Move {
 
         Move { 
             from, 
@@ -161,15 +161,15 @@ impl Move {
 
             ep, 
             xpiece, 
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }
 }
 
     
     pub fn new_castle(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, castle_move: MoveType) -> Move {
+            piece: usize, ep: u8, board: &Board, castle_move: MoveType) -> Move {
         Move {
             from, 
             to, 
@@ -178,9 +178,9 @@ impl Move {
 
             ep,
             xpiece: 12,             
-            castle_rights,
+            castle_rights: board.castle_state,
             promo_piece: 12,
-            last_halfmove,
+            last_halfmove: board.halfmove,
         }
     } 
 
@@ -194,14 +194,11 @@ impl Move {
             None
         };
 
-        let promo_piece = match promo {
-            Some(x) => x,
-            None => 12
-        };
+        let promo_piece = promo.unwrap_or(12);
 
 
-        let piece = movegen::get_piece(from, &b);
-        let xpiece = movegen::get_xpiece(to, &b);
+        let piece = movegen::get_piece(from, b);
+        let xpiece = movegen::get_xpiece(to, b);
 
         let mut move_type = MoveType::Quiet;
 

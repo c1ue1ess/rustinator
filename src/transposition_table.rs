@@ -50,8 +50,8 @@ impl TTable {
         let mut zorbist_array: [u64; 781] = [0; 781]; 
         let mut prng = rand::thread_rng();
 
-        for i in 0..781 {
-            zorbist_array[i] = prng.gen::<u64>()
+        for z in &mut zorbist_array  {
+            *z = prng.gen::<u64>()
         }
 
         zorbist_array
@@ -117,13 +117,11 @@ impl TTable {
     }
 
     pub fn get_hh(&self, piece: usize, to: usize) -> i32 {
-        //self.hheuristic[piece][to] 
-        0
+        self.hheuristic[piece][to] 
     }
 
     pub fn inc_hh(&mut self, piece: usize, to: usize, depth: i32) {
-        // self.hheuristic[piece][to] += depth*depth
-
+        self.hheuristic[piece][to] += depth*depth
     }
 }
 

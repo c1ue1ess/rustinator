@@ -91,7 +91,7 @@ fn position(buffer: String, tt: &mut TTable, book_pos: &mut String) -> Option<Bo
     Some(board)
 }
 
-fn go(board: Board, book_pos: &String, mut use_book: &mut bool, tt: &mut TTable) {
+fn go(board: Board, book_pos: &str, mut use_book: &mut bool, tt: &mut TTable) {
     dbg!(opening_book::get_opening_move(book_pos));
     if *use_book && opening_book::get_opening_move(book_pos) {
         *use_book = true;

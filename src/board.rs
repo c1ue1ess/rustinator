@@ -154,7 +154,7 @@ impl Board {
         b.util[1] =
             b.pieces[1] | b.pieces[3] | b.pieces[5] | b.pieces[7] | b.pieces[9] | b.pieces[11];
         b.util[2] = b.util[0] | b.util[1];
-        b.colour = if fen[1].contains("w") { 0 } else { 1 };
+        b.colour = if fen[1].contains('w') { 0 } else { 1 };
 
         match fen[2] {
             "KQkq"  => b.castle_state = 0b1111,
@@ -176,11 +176,11 @@ impl Board {
             _       => b.castle_state = 16,
         }
 
-        if fen[3].contains("-") {
+        if fen[3].contains('-') {
             b.ep = 64;
         } else {
-            for i in 0..64 {
-                if SQ_NAMES[i].contains(fen[3]) {
+            for (i, sq_name) in SQ_NAMES.iter().enumerate() {
+                if sq_name.contains(fen[3]) {
                     b.ep = i as u8;
                     break;
                 }
@@ -645,13 +645,13 @@ impl Board {
 
         hash ^= if self.colour == 1 { tt.zorbist_array[768] } else { 0 };
         
-        if self.castle_state & 0b1000 == 1{
+        if self.castle_state & 0b1000 == 8{
             hash ^= tt.zorbist_array[769];
         }
-        if self.castle_state & 0b100 == 1{
+        if self.castle_state & 0b100 == 4{
             hash ^= tt.zorbist_array[770];
         }
-        if self.castle_state & 0b10 == 1{
+        if self.castle_state & 0b10 == 2{
             hash ^= tt.zorbist_array[771];
         }
         if self.castle_state & 0b1 == 1{
@@ -693,7 +693,8 @@ impl fmt::Display for Board {
             let s = i.to_string();
             out.push_str(&s);
             out.push_str("    ");
-            for j in i * 8 - 8..i * 8 {
+            for j  in SQUARES.iter().take(i * 8).skip(i * 8 - 8) {
+                let j = *j as usize;
                 if (SQUARES[j] & self.pieces[0]) > 0 {
                     out.push_str("P ");
                 }
@@ -734,7 +735,7 @@ impl fmt::Display for Board {
                     out.push_str("- ");
                 }
             }
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push_str("\n     A B C D E F G H\n");
         write!(f, "{}", out)

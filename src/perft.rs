@@ -72,7 +72,7 @@ pub fn perft_counter(
         counter.count_move(b, last_m.unwrap());
         return;
     }
-    let moves = movegen::gen_moves(&b);
+    let moves = movegen::gen_moves(b);
     for m in moves {
         b.make_no_hashing(&m);
         if movegen::attacks_to(
@@ -95,7 +95,7 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     }
 
     let mut move_count = 0;
-    let moves = movegen::gen_moves(&b);
+    let moves = movegen::gen_moves(b);
     for m in moves {
         b.make_no_hashing(&m);
         
@@ -112,7 +112,7 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
 }
 
 pub fn perft_multi_thread(b: &Board, depth: usize) {
-    let moves = movegen::gen_moves(&b);
+    let moves = movegen::gen_moves(b);
     let pool = ThreadPool::new(moves.len());
     // let pool = ThreadPool::new(12);
     let total_count = Arc::new(Mutex::new(0));
