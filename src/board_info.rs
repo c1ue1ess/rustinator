@@ -1,9 +1,3 @@
-pub mod board;
-pub mod movegen;
-pub mod moves;
-
-pub use self::board::Board;
-pub use self::moves::Move;
 
 pub const SQUARES: [u64; 65] = [
     0x0000000000000001,
@@ -82,7 +76,7 @@ pub const SQUARES: [u64; 65] = [
 6: down left
 7: left
 */
-const RAYS: [[u64; 65]; 8] = [
+pub const RAYS: [[u64; 65]; 8] = [
     [
         0x0,
         0x100,
@@ -634,10 +628,10 @@ pub const FH: u64 = 0x8080808080808080;
 // rank masks
 // const R1: u64 = 0x00000000000000FF;
 // const R2: u64 = 0x000000000000FF00;
-const R3: u64 = 0x0000000000FF0000;
+pub const R3: u64 = 0x0000000000FF0000;
 // const R4: u64 = 0x00000000FF000000;
 // const R5: u64 = 0x000000FF00000000;
-const R6: u64 = 0x0000FF0000000000;
+pub const R6: u64 = 0x0000FF0000000000;
 // const R7: u64 = 0x00FF000000000000;
 // const R8: u64 = 0xFF00000000000000;
 

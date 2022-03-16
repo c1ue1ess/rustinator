@@ -1,11 +1,16 @@
+use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
 
-use crate::chess::moves::{Move, MoveType};
-use crate::chess::SQUARES;
-use crate::chess::SQ_NAMES;
-use crate::search::transposition_table::TTable;
+use crate::{ Move, TTable };
+use crate::moves::MoveType;
+use crate::board_info::*;
 
-#[derive(Debug, Copy, Clone)]
+// 2 ^ 14 sized prev move array
+const PREV_MOVE_SIZE: usize = 0;
+const PREV_MOVE_MASK: u64 = 0x0;
+
+#[derive(Debug, Clone)]
 pub struct Board {
     pub pieces: [u64; 12],
     pub util: [u64; 3],
@@ -18,7 +23,8 @@ pub struct Board {
     pub halfmove: usize,
     pub fullmove: usize,
 
-    pub hash: u64
+    pub hash: u64,
+    pub prev_moves: [u64; PREV_MOVE_SIZE],
 }
 
 impl Board {
@@ -27,11 +33,12 @@ impl Board {
             pieces: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             util: [0, 0, 0],
             colour: 0,
-            ep: 0,
+            ep: 64,
             castle_state: 0b1111,
             halfmove: 0,
             fullmove: 1,
             hash: 0,
+            prev_moves: [0; PREV_MOVE_SIZE]
         };
 
         b.pieces[0] =  0b0000000000000000000000000000000000000000000000001111111100000000; //wp 0
@@ -59,20 +66,22 @@ impl Board {
         let mut board = Board::new();
         board.hash = board.get_hash(tt);
         
+        board.add_prev_move();
+
         board
     }
 
-    #[allow(dead_code)]
     pub fn new_from_fen(fen: &str) -> Board {
         let mut b = Board {
             pieces: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             util: [0, 0, 0],
             colour: 0,
-            ep: 0,
+            ep: 64,
             castle_state: 0b1111,
             halfmove: 0,
             fullmove: 0,
             hash: 0,
+            prev_moves: [0; PREV_MOVE_SIZE],
         };
         let fen: Vec<&str> = fen.split(' ').collect();
 
@@ -201,8 +210,14 @@ impl Board {
         self.hash ^= tt.zorbist_array[m.piece * 64 + m.from];
         self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
 
+        self.halfmove += 1;
+
         match &m.move_type {
-            MoveType::Quiet => {}
+            MoveType::Quiet => {
+                if m.piece < 2 {
+                    self.halfmove = 0;
+                }
+            }
 
             MoveType::Capture => {
                 self.pieces[m.xpiece] ^= SQUARES[m.to];
@@ -210,11 +225,15 @@ impl Board {
                 self.util[2] ^= SQUARES[m.to];
 
                 self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+
+                self.halfmove = 0;
             }
 
             MoveType::DoublePush => {
                 self.ep = (m.to - 8 + (self.colour * 16)) as u8;
                 self.hash ^= tt.zorbist_array[773+(self.ep % 8) as usize];
+
+                self.halfmove = 0;
             }
 
             MoveType::EpCapture => {
@@ -223,6 +242,8 @@ impl Board {
                 self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
 
                 self.hash ^= tt.zorbist_array[m.xpiece * 64 + (m.to - 8 + (self.colour * 16))];
+
+                self.halfmove = 0;
             }
             
             MoveType::Promo => {
@@ -231,6 +252,8 @@ impl Board {
 
                 self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
                 self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+
+                self.halfmove = 0;
             }
             
             MoveType::PromoCapture => {
@@ -243,6 +266,8 @@ impl Board {
                 self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
                 self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
                 self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+
+                self.halfmove = 0;
             }
             
             MoveType::WKingSide => {
@@ -283,30 +308,43 @@ impl Board {
         }
 
         if m.piece == 10 {
+            if self.castle_state & 0b1000 > 0 {
+                // println!("do K");
+                self.hash ^= tt.zorbist_array[769];
+            }
+
+            if self.castle_state & 0b100 > 0 {
+                // println!("do Q");
+                self.hash ^= tt.zorbist_array[770];
+            }
             self.castle_state &= 0b11;
-            self.hash ^= tt.zorbist_array[769];
-            self.hash ^= tt.zorbist_array[770];
         }
         else if m.piece == 11 {
+            if self.castle_state & 0b10 > 0{
+                self.hash ^= tt.zorbist_array[771];
+            }
+            
+            if self.castle_state & 0b1 > 0 {
+                self.hash ^= tt.zorbist_array[772];
+            }
+            
             self.castle_state &= 0b1100;
-            self.hash ^= tt.zorbist_array[771];
-            self.hash ^= tt.zorbist_array[772];
         }
         
 
-        if m.from == 7 || m.to == 7 && self.castle_state & 0b1000 > 0 {
+        if (m.from == 7 || m.to == 7) && self.castle_state & 0b1000 > 0 {
             self.castle_state &= 0b0111;
             self.hash ^= tt.zorbist_array[769];
         }
-        if m.from == 0 || m.to == 0 && self.castle_state & 0b1000 > 0 {
+        if (m.from == 0 || m.to == 0) && self.castle_state & 0b100 > 0 {
             self.castle_state &= 0b1011;
             self.hash ^= tt.zorbist_array[770];
         }
-        if m.from == 63 || m.to == 63 && self.castle_state & 0b1000 > 0 {
+        if (m.from == 63 || m.to == 63) && self.castle_state & 0b10 > 0 {
             self.castle_state &= 0b1101;
             self.hash ^= tt.zorbist_array[771];
         }
-        if m.from == 56 || m.to == 56 && self.castle_state & 0b1000 > 0 {
+        if (m.from == 56 || m.to == 56) && self.castle_state & 0b1 > 0 {
             self.castle_state &= 0b1110;
             self.hash ^= tt.zorbist_array[772];
         }
@@ -316,25 +354,35 @@ impl Board {
         self.hash ^= tt.zorbist_array[768];
 
         self.fullmove += self.colour;
+
+        self.add_prev_move();
     }
 
     pub fn unmake(&mut self, m: &Move, tt: &TTable) {
+        self.rm_prev_move();
+
         self.fullmove -= self.colour;
+        self.halfmove = m.last_halfmove;
         
         let from_to = SQUARES[m.from] | SQUARES[m.to];
 
         // if the castle rights of last move are different, xor the hash
         // as castle rights can only be lost, there is no need to check if a bit is present in self rather than m
-        if self.castle_state & 0b1000 == 0 && m.castle_rights & 0b1000 > 0 {
+        // dbg!(self.castle_state);
+        if (self.castle_state & 0b1000 == 0) && (m.castle_rights & 0b1000 > 0) {
+            // println!("undo K");
             self.hash ^= tt.zorbist_array[769];
         }
-        if self.castle_state & 0b100 == 0 && m.castle_rights & 0b100 > 0 {
+        if (self.castle_state & 0b100 == 0) && (m.castle_rights & 0b100 > 0) {
+            // println!("undo Q");
             self.hash ^= tt.zorbist_array[770];
         }
-        if self.castle_state & 0b10 == 0 && m.castle_rights & 0b10 > 0 {
+        if (self.castle_state & 0b10 == 0) && (m.castle_rights & 0b10 > 0) {
+            // println!("k");
             self.hash ^= tt.zorbist_array[771];
         }
-        if self.castle_state & 0b1 == 0 && m.castle_rights & 0b1 > 0 {
+        if (self.castle_state & 0b1 == 0) && (m.castle_rights & 0b1 > 0) {
+            // println!("q");
             self.hash ^= tt.zorbist_array[772];
         }
 
@@ -431,8 +479,6 @@ impl Board {
     }
 
 
-
-    #[allow(dead_code)]
     pub fn make_no_hashing(&mut self, m: &Move) {
         let from_to = SQUARES[m.from] | SQUARES[m.to];
 
@@ -522,7 +568,6 @@ impl Board {
         self.fullmove += self.colour;
     }
 
-    #[allow(dead_code)]
     pub fn unmake_no_hashing(&mut self, m: &Move) {
         let from_to = SQUARES[m.from] | SQUARES[m.to];
 
@@ -618,6 +663,24 @@ impl Board {
         }
 
         hash
+    }
+
+    pub fn add_prev_move(&mut self){
+        //self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] += 1;
+    }
+
+    pub fn rm_prev_move(&mut self){
+        //self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] -= 1;
+    }
+
+    // returns true if 3 move rep or 50 move rule occurs in this pos 
+    pub fn is_bad_pos(&self) -> bool {
+        // if self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] == 3 || self.halfmove >= 100 {
+        //     true
+        // } else {
+        //     false
+        // }
+        false
     }
 }
 

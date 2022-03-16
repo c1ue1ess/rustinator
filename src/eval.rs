@@ -1,16 +1,28 @@
-use crate::chess::movegen;
-use crate::chess::Board;
-use crate::chess::Move;
-use crate::chess::moves::MoveType;
+use crate::search::Search;
+use crate::{ Board, Move, TTable };
+use crate::moves::MoveType;
+use crate::movegen::{ self, MoveOrderList };
 
 const PAWN: i32 = 100;
-const KNIGHT: i32 = 350;
+const KNIGHT: i32 = 400;
 const ROOK: i32 = 525;
-const BISHOP: i32 = 325;
-const QUEEN: i32 = 1000;
+const BISHOP: i32 = 350;
+const QUEEN: i32 = 1200;
 const KING: i32 = 25000;
 
+pub const PIECE_VALUE: [i32; 12] = [
+    PAWN, PAWN,
+    KNIGHT, KNIGHT,
+    ROOK, ROOK,
+    BISHOP, BISHOP,
+    QUEEN, QUEEN,
+    KING, KING
+];
+
+const BISHOP_PAIR_BONUS: i32 = 100;
+
 pub const CHECKMATE: i32 = -10000000;
+pub const STALEMATE: i32 = 0;
 
 // piece tables based off of https://www.chessprogramming.org/Simplified_Evaluation_Function as i know nothing about chess
 
@@ -95,7 +107,7 @@ const BKING_END_PT: [i32; 64] = [
     -40, -50,
 ];
 
-const PST: [[i32; 64]; 14] = [
+pub const PST: [[i32; 64]; 14] = [
     WPAWN_PT,
     BPAWN_PT,
     WKNIGHT_PT,
@@ -117,8 +129,9 @@ const CAPTURE_BONUS: i32 = 15;
 const PAWN_MOBILITY: i32 = 0;
 const KNIGHT_MOBILITY: i32 = 20;
 const ROOK_MOBILITY: i32 = 10;
-const BISHOP_MOBILITY: i32 = 10;
-const QUEEN_MOBILITY: i32 = 20;
+const BISHOP_MOBILITY: i32 = 15;
+// queen too agressive so brought this value down from 20
+const QUEEN_MOBILITY: i32 = 10;
 const KING_MOBILITY: i32 = 5;
 
 const PIECE_MOBILITY: [i32; 12] = [
@@ -130,9 +143,9 @@ const PIECE_MOBILITY: [i32; 12] = [
     KING_MOBILITY, KING_MOBILITY
 ];
 
-pub fn quiesce(b: &mut Board, mut alpha: i32, beta: i32, player: i32) -> i32 {
-    let eval = evaluate(b, player);
-
+pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, player: i32) -> i32 {
+    let eval = evaluate(&mut search.board, player);
+    //return eval;
     if eval >= beta {
         return beta;
     }
@@ -140,32 +153,35 @@ pub fn quiesce(b: &mut Board, mut alpha: i32, beta: i32, player: i32) -> i32 {
         alpha = eval;
     }
 
-    let mut captures = Vec::with_capacity(300);
-    movegen::all_attk(&mut captures, b);
-    // sort captures
-    captures.sort_unstable_by(|a, b| a.xpiece.cmp(&b.xpiece).reverse());
+    // delta pruning
+    if eval < alpha - QUEEN {
+        return alpha;
+    }
 
+
+    // sort captures
+    let captures = MoveOrderList::new_pv_attacks(&search.board, movegen::gen_attk(&search.board), search.tt); 
+    
     let mut no_moves = true;
     let mut checkmate = false;
     let mut score;
+    
+    
     for cap in captures {
-        b.make_no_hashing(&cap);
+        search.board.make_no_hashing(&cap);
 
-        if movegen::check_check(
-            b,
-            &movegen::bitscn_fw(&b.pieces[11 - b.colour]),
-            &(1 - b.colour),
-        ) > 0
+        if movegen::in_check_next(&search.board) > 0
         {
-            b.unmake_no_hashing(&cap);
+            search.board.unmake_no_hashing(&cap);
             checkmate = true;
             continue;
         } else {
             no_moves = false;
         }
 
-        score = -quiesce(b, -beta, -alpha, -player);
-        b.unmake_no_hashing(&cap);
+        score = -quiesce(search, -beta, -alpha, -player);
+        
+        search.board.unmake_no_hashing(&cap);
 
         if score >= beta {
             return beta;
@@ -173,37 +189,50 @@ pub fn quiesce(b: &mut Board, mut alpha: i32, beta: i32, player: i32) -> i32 {
         if score > alpha {
             alpha = score;
         }
+
     }
 
+    
     if no_moves {
         // if checkmate/stalemate
-        if checkmate
-            && movegen::check_check(
-                b,
-                &movegen::bitscn_fw(&b.pieces[10 + b.colour]),
-                &(b.colour),
-            ) > 0
-        {
+        if checkmate && movegen::in_check_now(&search.board) > 0 {
             CHECKMATE
         } else {
-            0
+            STALEMATE
         }
+        // 0
     } else {
         alpha
     }
 }
 
-pub fn evaluate(b: &Board, player: i32) -> i32 {
-    let mut eval = (mat_balance(b) + pos_balance(b)); 
-    eval *= player;
-    eval + mobility(b)
+
+
+pub fn evaluate(b: &mut Board, player: i32) -> i32 {
+    let mut eval = mat_balance(b);
+    // eval += pos_balance(b); 
+    
+    eval * player;
+    
+    // //eval += mobility(b);
+    
+    eval
+
+    
 }
 
 fn mat_balance(b: &Board) -> i32 {
     let pawns = PAWN * (b.pieces[0].count_ones() as i32 - b.pieces[1].count_ones() as i32);
     let knights = KNIGHT * (b.pieces[2].count_ones() as i32 - b.pieces[3].count_ones() as i32);
     let rooks = ROOK * (b.pieces[4].count_ones() as i32 - b.pieces[5].count_ones() as i32);
-    let bishops = BISHOP * (b.pieces[6].count_ones() as i32 - b.pieces[7].count_ones() as i32);
+    
+    // bishop pair bonus
+    let w_bishop_count = b.pieces[6].count_ones() as i32;
+    let w_bishop_bonus =  BISHOP_PAIR_BONUS * (w_bishop_count/2);
+    let b_bishop_count = b.pieces[7].count_ones() as i32;
+    let b_bishop_bonus =  BISHOP_PAIR_BONUS * (b_bishop_count/2);
+    let bishops = BISHOP * (w_bishop_count - b_bishop_count) + w_bishop_bonus - b_bishop_bonus;
+
     let queens = QUEEN * (b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
     let kings = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
 
@@ -243,14 +272,14 @@ fn pos_balance(b: &Board) -> i32 {
     pos
 }
 
-fn mobility(b: &Board) -> i32 {
+fn mobility(b: &mut Board) -> i32 {
     let mut mob = 0;
 
     for m in movegen::gen_moves(b) {
         mob += PIECE_MOBILITY[m.piece];
         mob += if m.move_type ==  MoveType::Capture { CAPTURE_BONUS } else { 0 };
     }
-
+    
     mob
 }
 

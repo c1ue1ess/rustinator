@@ -2,9 +2,10 @@
 use std::sync::{Arc, Mutex};
 use threadpool::ThreadPool;
 
-use crate::chess::movegen;
-use crate::chess::moves::{Move, MoveType};
-use crate::chess::Board;
+use crate::{ Board, Move };
+use crate::moves::MoveType;
+use crate::movegen;
+
 #[derive(Debug)]
 pub struct PerftCounter {
     moves: usize,
@@ -47,7 +48,7 @@ impl PerftCounter {
             }
         }
 
-        if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[10 + b.colour]), &b.colour) > 0 {
+        if movegen::attacks_to(b, movegen::bitscn_fw(&b.pieces[10 + b.colour]), b.colour) > 0 {
             self.check += 1;
         }
 
@@ -74,10 +75,10 @@ pub fn perft_counter(
     let moves = movegen::gen_moves(&b);
     for m in moves {
         b.make_no_hashing(&m);
-        if movegen::check_check(
+        if movegen::attacks_to(
             b,
-            &movegen::bitscn_fw(&b.pieces[11 - b.colour]),
-            &(1 - b.colour),
+            movegen::bitscn_fw(&b.pieces[11 - b.colour]),
+            (1 - b.colour),
         ) > 0
         {
             b.unmake_no_hashing(&m);
@@ -98,7 +99,7 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     for m in moves {
         b.make_no_hashing(&m);
         
-        if movegen::check_check(b, &movegen::bitscn_fw(&b.pieces[11 - b.colour]), &(1 - b.colour),) > 0 {
+        if movegen::attacks_to(b, movegen::bitscn_fw(&b.pieces[11 - b.colour]), (1 - b.colour),) > 0 {
             b.unmake_no_hashing(&m);
             continue;
         }
@@ -116,16 +117,16 @@ pub fn perft_multi_thread(b: &Board, depth: usize) {
     // let pool = ThreadPool::new(12);
     let total_count = Arc::new(Mutex::new(0));
     for m in moves {
-        let mut new_b = *b;
+        let mut new_b = b.clone();
         let move_count = Arc::clone(&total_count);
 
         pool.execute(move || {
             new_b.make_no_hashing(&m);
 
-            if movegen::check_check(
+            if movegen::attacks_to(
                 &new_b,
-                &movegen::bitscn_fw(&new_b.pieces[11 - new_b.colour]),
-                &(1 - new_b.colour),
+                movegen::bitscn_fw(&new_b.pieces[11 - new_b.colour]),
+                (1 - new_b.colour),
             ) > 0
             {
                 new_b.unmake_no_hashing(&m);

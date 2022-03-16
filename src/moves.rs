@@ -1,7 +1,8 @@
 use std::fmt;
-use crate::chess::Board;
-use crate::chess::movegen;
-use crate::chess::SQ_NAMES;
+
+use crate::Board;
+use crate::board_info::SQ_NAMES;
+use crate::movegen;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MoveType {
@@ -36,7 +37,7 @@ impl fmt::Display for MoveType {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Debug, Copy ,Clone, PartialEq)]
 pub struct Move {
     pub from: usize,
     pub to: usize,
@@ -48,6 +49,8 @@ pub struct Move {
     pub xpiece: usize,
     pub castle_rights: u8,
     pub promo_piece: usize,
+
+    pub last_halfmove: usize,
 
 }
 
@@ -65,7 +68,7 @@ ep: {}    xpiece: {}    castle rights: {}    promo piece: {}",
 
 impl Move {
     pub fn new_quiet(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8) -> Move {
+            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
         
         Move { 
             from, 
@@ -77,11 +80,12 @@ impl Move {
             xpiece: 12, 
             castle_rights,
             promo_piece: 12,
+            last_halfmove,
         }
     }
 
     pub fn new_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8) -> Move {
+            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
         
         Move { 
             from, 
@@ -94,11 +98,12 @@ impl Move {
             xpiece, 
             castle_rights,
             promo_piece: 12,
+            last_halfmove,
         }    
     }
 
     pub fn new_double_push(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8) -> Move {
+            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
         Move { 
             from, 
             to, 
@@ -109,11 +114,12 @@ impl Move {
             xpiece: 12, 
             castle_rights,
             promo_piece: 12,
+            last_halfmove,
         }                
     }
 
     pub fn new_ep_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8) -> Move {
+            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize) -> Move {
         Move { 
             from, 
             to, 
@@ -124,10 +130,11 @@ impl Move {
             xpiece, 
             castle_rights,
             promo_piece: 12,
+            last_halfmove,
         }
     }
     pub fn new_promo(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, promo_piece: usize) -> Move {
+            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, promo_piece: usize) -> Move {
 
         Move { 
             from, 
@@ -139,11 +146,12 @@ impl Move {
             xpiece: 12, 
             castle_rights,
             promo_piece,
+            last_halfmove,
         }
     }
     
     pub fn new_promo_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, promo_piece: usize) -> Move {
+            piece: usize, xpiece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, promo_piece: usize) -> Move {
 
         Move { 
             from, 
@@ -155,12 +163,13 @@ impl Move {
             xpiece, 
             castle_rights,
             promo_piece,
+            last_halfmove,
         }
 }
 
     
     pub fn new_castle(from: usize, to: usize, 
-            piece: usize, ep: u8, castle_rights: u8, castle_move: MoveType) -> Move {
+            piece: usize, ep: u8, castle_rights: u8, last_halfmove: usize, castle_move: MoveType) -> Move {
         Move {
             from, 
             to, 
@@ -171,6 +180,7 @@ impl Move {
             xpiece: 12,             
             castle_rights,
             promo_piece: 12,
+            last_halfmove,
         }
     } 
 
@@ -223,7 +233,18 @@ impl Move {
             move_type = MoveType::Capture;
         }
 
-        Move { from, to, piece, move_type, ep: b.ep, xpiece, castle_rights: b.castle_state, promo_piece }
+        Move { 
+            from, 
+            to, 
+            piece, 
+            move_type, 
+            ep: b.ep, 
+            xpiece, 
+            castle_rights: 
+            b.castle_state, 
+            promo_piece, 
+            last_halfmove: b.halfmove 
+        }
     }
 
     pub fn as_uci_string(&self) -> String {
