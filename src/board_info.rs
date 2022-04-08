@@ -618,22 +618,26 @@ pub const RAYS: [[u64; 65]; 8] = [
 // file masks
 pub const FA: u64 = 0x0101010101010101;
 pub const FB: u64 = 0x0202020202020202;
-// const FC: u64 = 0x0404040404040404;
-// const FD: u64 = 0x0808080808080808;
-// const FE: u64 = 0x1010101010101010;
-// const FF: u64 = 0x2020202020202020;
+pub const FC: u64 = 0x0404040404040404;
+pub const FD: u64 = 0x0808080808080808;
+pub const FE: u64 = 0x1010101010101010;
+pub const FF: u64 = 0x2020202020202020;
 pub const FG: u64 = 0x4040404040404040;
 pub const FH: u64 = 0x8080808080808080;
 
+pub const FILES: [u64; 8] = [ FA, FB, FC, FD, FE, FF, FG, FH ];
+
 // rank masks
-// const R1: u64 = 0x00000000000000FF;
-// const R2: u64 = 0x000000000000FF00;
+const R1: u64 = 0x00000000000000FF;
+const R2: u64 = 0x000000000000FF00;
 pub const R3: u64 = 0x0000000000FF0000;
-// const R4: u64 = 0x00000000FF000000;
-// const R5: u64 = 0x000000FF00000000;
+const R4: u64 = 0x00000000FF000000;
+const R5: u64 = 0x000000FF00000000;
 pub const R6: u64 = 0x0000FF0000000000;
-// const R7: u64 = 0x00FF000000000000;
-// const R8: u64 = 0xFF00000000000000;
+const R7: u64 = 0x00FF000000000000;
+const R8: u64 = 0xFF00000000000000;
+
+pub const RANKS : [u64; 8] = [ R1, R2, R3, R4, R5, R6, R7, R8 ];
 
 pub const SQ_NAMES: [&str; 64] = [
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",

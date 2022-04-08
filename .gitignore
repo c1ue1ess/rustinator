@@ -1,3 +1,4 @@
+perf*
 /target
 /other
 /.vscode
@@ -6,3 +7,4 @@ perf.data
 perf.data.old
 games.pgn
 log/
+callgrind*

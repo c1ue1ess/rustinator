@@ -99,7 +99,7 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     for m in moves {
         b.make_no_hashing(&m);
         
-        if movegen::attacks_to(b, movegen::bitscn_fw(&b.pieces[11 - b.colour]), (1 - b.colour),) > 0 {
+        if movegen::in_check_next(b) > 0 {
             b.unmake_no_hashing(&m);
             continue;
         }

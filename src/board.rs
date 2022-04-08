@@ -7,8 +7,8 @@ use crate::moves::MoveType;
 use crate::board_info::*;
 
 // 2 ^ 14 sized prev move array
-const PREV_MOVE_SIZE: usize = 0;
-const PREV_MOVE_MASK: u64 = 0x0;
+const PREV_MOVE_SIZE: usize = 16384;
+const PREV_MOVE_MASK: u64 = 0x3FFF;
 
 #[derive(Debug, Clone)]
 pub struct Board {
@@ -20,11 +20,11 @@ pub struct Board {
     pub ep: u8,
     pub castle_state: u8,
 
-    pub halfmove: usize,
-    pub fullmove: usize,
+    pub halfmove: u8,
+    pub fullmove: u8,
 
     pub hash: u64,
-    pub prev_moves: [u64; PREV_MOVE_SIZE],
+    pub prev_moves: [u8; PREV_MOVE_SIZE],
 }
 
 impl Board {
@@ -194,9 +194,9 @@ impl Board {
     }
 
     pub fn make(&mut self, m: &Move, tt: &TTable) {
-        let from_to = SQUARES[m.from] | SQUARES[m.to];
+        let from_to = SQUARES[m.from as usize] | SQUARES[m.to as usize];
 
-        self.pieces[m.piece] ^= from_to;
+        self.pieces[m.piece as usize] ^= from_to;
         self.util[self.colour] ^= from_to;
         self.util[2] ^= from_to;
         
@@ -207,8 +207,8 @@ impl Board {
         self.ep = 64;
 
 
-        self.hash ^= tt.zorbist_array[m.piece * 64 + m.from];
-        self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+        self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.from as usize];
+        self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
 
         self.halfmove += 1;
 
@@ -220,52 +220,52 @@ impl Board {
             }
 
             MoveType::Capture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + m.to as usize];
 
                 self.halfmove = 0;
             }
 
             MoveType::DoublePush => {
-                self.ep = (m.to - 8 + (self.colour * 16)) as u8;
+                self.ep = (m.to as usize - 8 + (self.colour * 16)) as u8;
                 self.hash ^= tt.zorbist_array[773+(self.ep % 8) as usize];
 
                 self.halfmove = 0;
             }
 
             MoveType::EpCapture => {
-                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.pieces[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
 
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + (m.to - 8 + (self.colour * 16))];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + (m.to as usize - 8 + (self.colour * 16))];
 
                 self.halfmove = 0;
             }
             
             MoveType::Promo => {
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.promo_piece as usize * 64 + m.to as usize];
 
                 self.halfmove = 0;
             }
             
             MoveType::PromoCapture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.promo_piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + m.to as usize];
 
                 self.halfmove = 0;
             }
@@ -307,7 +307,7 @@ impl Board {
             }
         }
 
-        if m.piece == 10 {
+        if m.piece as usize == 10 {
             if self.castle_state & 0b1000 > 0 {
                 // println!("do K");
                 self.hash ^= tt.zorbist_array[769];
@@ -319,7 +319,7 @@ impl Board {
             }
             self.castle_state &= 0b11;
         }
-        else if m.piece == 11 {
+        else if m.piece as usize == 11 {
             if self.castle_state & 0b10 > 0{
                 self.hash ^= tt.zorbist_array[771];
             }
@@ -332,19 +332,19 @@ impl Board {
         }
         
 
-        if (m.from == 7 || m.to == 7) && self.castle_state & 0b1000 > 0 {
+        if (m.from as usize == 7 || m.to as usize == 7) && self.castle_state & 0b1000 > 0 {
             self.castle_state &= 0b0111;
             self.hash ^= tt.zorbist_array[769];
         }
-        if (m.from == 0 || m.to == 0) && self.castle_state & 0b100 > 0 {
+        if (m.from as usize == 0 || m.to as usize == 0) && self.castle_state & 0b100 > 0 {
             self.castle_state &= 0b1011;
             self.hash ^= tt.zorbist_array[770];
         }
-        if (m.from == 63 || m.to == 63) && self.castle_state & 0b10 > 0 {
+        if (m.from as usize == 63 || m.to as usize == 63) && self.castle_state & 0b10 > 0 {
             self.castle_state &= 0b1101;
             self.hash ^= tt.zorbist_array[771];
         }
-        if (m.from == 56 || m.to == 56) && self.castle_state & 0b1 > 0 {
+        if (m.from as usize == 56 || m.to as usize == 56) && self.castle_state & 0b1 > 0 {
             self.castle_state &= 0b1110;
             self.hash ^= tt.zorbist_array[772];
         }
@@ -353,7 +353,7 @@ impl Board {
         self.colour ^= 1;
         self.hash ^= tt.zorbist_array[768];
 
-        self.fullmove += self.colour;
+        //self.fullmove += self.colour as u8;
 
         self.add_prev_move();
     }
@@ -361,33 +361,34 @@ impl Board {
     pub fn unmake(&mut self, m: &Move, tt: &TTable) {
         self.rm_prev_move();
 
-        self.fullmove -= self.colour;
+        //self.fullmove -= self.colour as u8;
         self.halfmove = m.last_halfmove;
         
-        let from_to = SQUARES[m.from] | SQUARES[m.to];
+        let from_to = SQUARES[m.from as usize] | SQUARES[m.to as usize];
 
         // if the castle rights of last move are different, xor the hash
         // as castle rights can only be lost, there is no need to check if a bit is present in self rather than m
         // dbg!(self.castle_state);
-        if (self.castle_state & 0b1000 == 0) && (m.castle_rights & 0b1000 > 0) {
+        if (self.castle_state ^ m.castle_rights) & 0b1000 == 8 {
             // println!("undo K");
             self.hash ^= tt.zorbist_array[769];
         }
-        if (self.castle_state & 0b100 == 0) && (m.castle_rights & 0b100 > 0) {
+        if (self.castle_state ^ m.castle_rights) & 0b100 == 4 {
             // println!("undo Q");
             self.hash ^= tt.zorbist_array[770];
         }
-        if (self.castle_state & 0b10 == 0) && (m.castle_rights & 0b10 > 0) {
+        if (self.castle_state ^ m.castle_rights) & 0b10 == 2 {
             // println!("k");
             self.hash ^= tt.zorbist_array[771];
         }
-        if (self.castle_state & 0b1 == 0) && (m.castle_rights & 0b1 > 0) {
+        if (self.castle_state ^ m.castle_rights) & 0b1 == 1 {
             // println!("q");
             self.hash ^= tt.zorbist_array[772];
         }
 
         self.castle_state = m.castle_rights;
         
+        // toggle colour
         self.colour ^= 1;
         self.hash ^= tt.zorbist_array[768];
 
@@ -398,50 +399,51 @@ impl Board {
         if m.ep < 64 {
             self.hash ^= tt.zorbist_array[773+ (m.ep % 8) as usize];
         }
+        
         self.ep = m.ep;
         
-        self.pieces[m.piece] ^= from_to;
+        self.pieces[m.piece as usize] ^= from_to;
         self.util[self.colour] ^= from_to;
         self.util[2] ^= from_to;
 
-        self.hash ^= tt.zorbist_array[m.piece * 64 + m.from];
-        self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
+        self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.from as usize];
+        self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
 
         match &m.move_type {
             MoveType::Quiet => {}
 
             MoveType::Capture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + m.to as usize];
             }
             MoveType::DoublePush => {}
             MoveType::EpCapture => {
-                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.pieces[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
 
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + (m.to - 8 + (self.colour * 16))];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + (m.to as usize - 8 + (self.colour * 16))];
             }
             MoveType::Promo => {
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.promo_piece as usize * 64 + m.to as usize];
             }
             MoveType::PromoCapture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
 
-                self.hash ^= tt.zorbist_array[m.piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.promo_piece * 64 + m.to];
-                self.hash ^= tt.zorbist_array[m.xpiece * 64 + m.to];
+                self.hash ^= tt.zorbist_array[m.piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.promo_piece as usize * 64 + m.to as usize];
+                self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + m.to as usize];
             }
             MoveType::WKingSide => {
                 self.pieces[4] ^= SQUARES[7] | SQUARES[5];
@@ -480,9 +482,9 @@ impl Board {
 
 
     pub fn make_no_hashing(&mut self, m: &Move) {
-        let from_to = SQUARES[m.from] | SQUARES[m.to];
+        let from_to = SQUARES[m.from as usize] | SQUARES[m.to as usize];
 
-        self.pieces[m.piece] ^= from_to;
+        self.pieces[m.piece as usize] ^= from_to;
         self.util[self.colour] ^= from_to;
         self.util[2] ^= from_to;
         self.ep = 64;
@@ -491,32 +493,32 @@ impl Board {
             MoveType::Quiet => {}
 
             MoveType::Capture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
             }
 
             MoveType::DoublePush => {
-                self.ep = (m.to - 8 + (self.colour * 16)) as u8;
+                self.ep = (m.to as usize - 8 + (self.colour * 16)) as u8;
             }
 
             MoveType::EpCapture => {
-                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.pieces[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
             }
             
             MoveType::Promo => {
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
             }
             
             MoveType::PromoCapture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
             }
             
             MoveType::WKingSide => {
@@ -545,37 +547,37 @@ impl Board {
         }
 
         // toggling castle rights
-        if m.from == 7 || m.to == 7 {
+        if m.from as usize == 7 || m.to as usize == 7 {
             self.castle_state &= 0b0111;
         }
-        if m.from == 0 || m.to == 0 {
+        if m.from as usize == 0 || m.to as usize == 0 {
             self.castle_state &= 0b1011;
         }
-        if m.from == 63 || m.to == 63 {
+        if m.from as usize == 63 || m.to as usize == 63 {
             self.castle_state &= 0b1101;
         }
-        if m.from == 56 || m.to == 56 {
+        if m.from as usize == 56 || m.to as usize == 56 {
             self.castle_state &= 0b1110;
         }
-        if m.piece == 10 {
+        if m.piece as usize == 10 {
             self.castle_state &= 0b11;
         }
-        if m.piece == 11 {
+        if m.piece as usize == 11 {
             self.castle_state &= 0b1100;
         }
 
         self.colour ^= 1;
-        self.fullmove += self.colour;
+        //self.fullmove += self.colour as u8;
     }
 
     pub fn unmake_no_hashing(&mut self, m: &Move) {
-        let from_to = SQUARES[m.from] | SQUARES[m.to];
+        let from_to = SQUARES[m.from as usize] | SQUARES[m.to as usize];
 
         self.castle_state = m.castle_rights;
         self.colour ^= 1;
         self.ep = m.ep;
         
-        self.pieces[m.piece] ^= from_to;
+        self.pieces[m.piece as usize] ^= from_to;
         self.util[self.colour] ^= from_to;
         self.util[2] ^= from_to;
 
@@ -583,26 +585,26 @@ impl Board {
             MoveType::Quiet => {}
 
             MoveType::Capture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
             }
             MoveType::DoublePush => {}
             MoveType::EpCapture => {
-                self.pieces[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[1 - self.colour] ^= SQUARES[m.to - 8 + (self.colour * 16)];
-                self.util[2] ^= SQUARES[m.to - 8 + (self.colour * 16)];
+                self.pieces[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
+                self.util[2] ^= SQUARES[m.to as usize - 8 + (self.colour * 16)];
             }
             MoveType::Promo => {
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
             }
             MoveType::PromoCapture => {
-                self.pieces[m.xpiece] ^= SQUARES[m.to];
-                self.util[1 - self.colour] ^= SQUARES[m.to];
-                self.util[2] ^= SQUARES[m.to];
-                self.pieces[self.colour] ^= SQUARES[m.to];
-                self.pieces[m.promo_piece] ^= SQUARES[m.to];
+                self.pieces[m.xpiece as usize] ^= SQUARES[m.to as usize];
+                self.util[1 - self.colour] ^= SQUARES[m.to as usize];
+                self.util[2] ^= SQUARES[m.to as usize];
+                self.pieces[self.colour] ^= SQUARES[m.to as usize];
+                self.pieces[m.promo_piece as usize] ^= SQUARES[m.to as usize];
             }
             MoveType::WKingSide => {
                 self.pieces[4] ^= SQUARES[7] | SQUARES[5];
@@ -666,21 +668,20 @@ impl Board {
     }
 
     pub fn add_prev_move(&mut self){
-        //self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] += 1;
+        self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] += 1;
     }
 
     pub fn rm_prev_move(&mut self){
-        //self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] -= 1;
+        self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] -= 1;
     }
 
     // returns true if 3 move rep or 50 move rule occurs in this pos 
     pub fn is_bad_pos(&self) -> bool {
-        // if self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] == 3 || self.halfmove >= 100 {
-        //     true
-        // } else {
-        //     false
-        // }
-        false
+        if self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] == 3 || self.halfmove >= 100 {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -693,8 +694,7 @@ impl fmt::Display for Board {
             let s = i.to_string();
             out.push_str(&s);
             out.push_str("    ");
-            for j  in SQUARES.iter().take(i * 8).skip(i * 8 - 8) {
-                let j = *j as usize;
+            for j in i * 8 - 8..i * 8 {
                 if (SQUARES[j] & self.pieces[0]) > 0 {
                     out.push_str("P ");
                 }

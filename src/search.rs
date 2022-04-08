@@ -4,12 +4,14 @@ use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 
-use crate::movegen::{self, MoveOrderList, gen_attk};
+use crate::movegen::{self, gen_attk, in_check_now};
+use crate::move_ordering::{MoveOrderList, RootOrderList, KillerMoves};
+use crate::moves::MoveType;
 use crate::{ Board, Move, TTable };
-use crate::eval::{self, STALEMATE};
+use crate::eval::{self, STALEMATE, CHECKMATE};
 use crate::transposition_table::{ NodeType, TEntry };
 
-const MAX_SEARCH_DEPTH: usize = 20;
+pub const MAX_SEARCH_DEPTH: usize = 50;
 
 const TIME_LIM_MS: u64 = 5000;
 const ALPHA_TIME_BONUS: u64 = 250;
@@ -38,77 +40,24 @@ impl TimeControl {
     }
 }
 
-// pub fn iterative_deepening_search_mt(mut search: Search) -> Option<Move> {
-//     let mut best_score = i32::MIN;
-//     let mut best_move: Option<Move> = None;
-
-
-//     let mut curr = (i32::MIN, None);
-//     search.tt.hit_count = 0;
-//     search.tt.miss_count = 0;
-
-//     for depth in 2..MAX_SEARCH_DEPTH {
-//         let mut complete = false;
-//         if search.tc.start_time.elapsed() <= Duration::from_millis(TIME_LIM_MS / 2){
-//             MoveOrderList::new_root(&search.board, search.tt, best_move).move_scores.par_iter()
-//                 .map(| x | x.0)
-//                 .for_each(|m| {
-//                     search.tt
-//                     let mut new_board = search.board.clone();
-//                     new_board.make(&m, search.tt);
-//                     let mut new_search;
-//                     unsafe {
-//                         new_search = Search::new(new_board, search.tt, search.tc.clone());
-//                     }                   
-
-//                     new_search.root_search(best_move, depth-1);
-//                 });
-//             complete = true;
-//         }
-        
-        
-//         // cut off any potentially unstable moves
-//         if search.tc.start_time.elapsed() >= Duration::from_millis(TIME_LIM_MS + search.tc.additional) {
-//             println!("info string cut early");
-//             break;
-//         }
-        
-        
-//         best_score = curr.0;
-//         best_move = curr.1;
-//         if complete {
-//             println!("info string completed iteration");
-//             println!("info string {}ms left", (TIME_LIM_MS + search.tc.additional) as u128 - search.tc.start_time.elapsed().as_millis());
-//             search.tc.add_time(500*depth as u64);
-//         } 
-            
-//     }
-
-//     println!("info string hitcount={}, miss_count={}", search.tt.hit_count, search.tt.miss_count);
-//     best_move
-// }
-
 impl <'a> Search<'a> {
     pub fn new(board: Board, tt: &'a mut TTable, tc: TimeControl) -> Search<'a> {
         Search { board, tt, tc }
     }
 
     pub fn iterative_deepening_search(&mut self) -> Option<Move> {
-        let mut best_score = i32::MIN;
-        let mut best_move: Option<Move> = None;
-
-
-        let mut curr = (i32::MIN, None);
         self.tt.hit_count = 0;
         self.tt.miss_count = 0;
+
+        let mut root = RootOrderList::new(&self.board);
+        let mut km = KillerMoves::new();
 
         for depth in 1..MAX_SEARCH_DEPTH {
             let mut complete = false;
             if self.tc.start_time.elapsed() <= Duration::from_millis(TIME_LIM_MS / 2){
-                curr = self.root_search(best_move, depth);
+                self.root_search(&mut root, &mut km, depth);
                 complete = true;
             }
-            
             
             // cut off any potentially unstable moves
             if self.tc.start_time.elapsed() >= Duration::from_millis(TIME_LIM_MS + self.tc.additional) {
@@ -116,9 +65,6 @@ impl <'a> Search<'a> {
                 break;
             }
             
-            
-            best_score = curr.0;
-            best_move = curr.1;
             if complete {
                 println!("info string completed iteration");
                 println!("info string {}ms left", (TIME_LIM_MS + self.tc.additional) as u128 - self.tc.start_time.elapsed().as_millis());
@@ -128,30 +74,33 @@ impl <'a> Search<'a> {
         }
 
         println!("info string hitcount={}, miss_count={}", self.tt.hit_count, self.tt.miss_count);
-        best_move
+        root.get_bestmove()
     }
 
 
-    pub fn root_search( &mut self, last_best: Option<Move>, depth: usize) -> (i32, Option<Move>) {
-        let mut best_move = last_best;
+    pub fn root_search( &mut self, root_moves: &mut RootOrderList, km: &mut KillerMoves, depth: usize) -> i32 {
+        let mut best_move = None;
         let mut best_score = i32::MIN+1;
         let player = if self.board.colour == 0 { 1 } else { -1 };
-        
-        for m in MoveOrderList::new_root(&self.board, self.tt, last_best) {
+
+        root_moves.sort();
+
+        for (index, (m, curr_score)) in root_moves.now.iter().enumerate() {
             if self.tc.start_time.elapsed() >= Duration::from_millis(TIME_LIM_MS + self.tc.additional) {
                 println!("info string incomplete search");
-                return (best_score, best_move);
+                return best_score;
             }
 
             self.board.make(&m, self.tt);
-            let og_hash = self.board.hash;
 
             if movegen::in_check_next(&self.board) > 0 {
                 self.board.unmake(&m, self.tt);
                 continue;
             }
 
-            let score = -self.negamax(i32::MIN + 1, -best_score, depth-1, MAX_SEARCH_DEPTH as i32, -player);
+            let score = -self.pvs(i32::MIN + 1, -best_score, depth-1, MAX_SEARCH_DEPTH as i32, -player, km);
+
+            root_moves.next[index] = (*m,score);
 
             if score > best_score {
                 best_move = Some(m);
@@ -168,10 +117,11 @@ impl <'a> Search<'a> {
             self.board.unmake(&m, self.tt);
         }
         
-        (best_score, best_move)
+        root_moves.done_iteration();
+        best_score
     }
 
-    pub fn negamax( &mut self, mut alpha: i32, beta: i32, depth: usize, mate_dist: i32, player: i32 ) -> i32 {
+    pub fn pvs( &mut self, mut alpha: i32, beta: i32, mut depth: usize, mate_dist: i32, player: i32, km: &mut KillerMoves ) -> i32 {
 
         if let Some(hash_score) = self.tt.get(self.board.hash, depth as u8, mate_dist, alpha, beta) {
             return hash_score;
@@ -181,8 +131,12 @@ impl <'a> Search<'a> {
         }
 
         if depth == 0 {
-            let eval = eval::quiesce(self, alpha, beta, player);
-            self.tt.insert(TEntry::new(self.board.hash, None, 0, eval, NodeType::Pv));
+            let eval = eval::quiesce(self, alpha, beta, mate_dist-1, player);
+            if eval < CHECKMATE{
+                self.tt.insert(TEntry::new(self.board.hash, None, 0, eval, NodeType::Pv));
+            } else {
+                self.tt.insert(TEntry::new(self.board.hash, None, 0, eval, NodeType::Beta))
+            }
             return eval;
         }
 
@@ -191,13 +145,17 @@ impl <'a> Search<'a> {
         let mut checkmate = false;
         let mut node_type = NodeType::Alpha;
 
+        let mut sub_km = KillerMoves::new();
 
+        let og_hash = self.board.hash; 
         // staged move ordering - generates the pv and captures first and then afterwards the quiet moves 
-        let captures = |b:&mut Board, tt: &mut TTable|  MoveOrderList::new_pv_attacks(b, movegen::gen_attk(b), tt);
-        let quiet = |b:&mut Board, tt: &mut TTable| MoveOrderList::new_quiet(b, movegen::gen_quiet(b), tt);
+        let captures = |b:&mut Board, _km: &KillerMoves, tt: &TTable|  MoveOrderList::new_pv_attacks(b, &movegen::gen_attk(b), tt);
+        let quiet = |b:&mut Board, km: &KillerMoves, tt: &TTable| MoveOrderList::new_quiet(b, &movegen::gen_quiet(b), km, tt);
 
+        let mut is_pv = true;
+        
         for moveset in [captures, quiet]{
-            let moves = moveset(&mut self.board, self.tt);
+            let moves = moveset(&mut self.board, km, self.tt);
             for m in moves {
                 if self.tc.start_time.elapsed() >= Duration::from_millis(TIME_LIM_MS + self.tc.additional) {
                     println!("info string incomplete search");
@@ -214,11 +172,26 @@ impl <'a> Search<'a> {
                     no_moves = false;
                 }
 
-                let score = -self.negamax(-beta,-alpha,depth - 1, mate_dist - 1, -player);
+                let mut score: i32;
+
+                if is_pv {
+                    score = -self.pvs(-beta,-alpha,depth - 1, mate_dist - 1, -player, &mut sub_km);
+                    is_pv = false;
+                } else {
+                    score = -self.pvs(-alpha-1,-alpha,depth - 1, mate_dist - 1, -player, &mut sub_km);
+                    if score > alpha {
+                        score = -self.pvs(-beta,-alpha,depth - 1, mate_dist - 1, -player, &mut sub_km);
+                    }
+                }
 
                 self.board.unmake(&m, self.tt);
 
                 if score >= beta {
+                    match m.move_type {
+                       MoveType::Capture | MoveType::EpCapture | MoveType::PromoCapture => {},
+                       _  => km.push(m)
+                    }
+
                     self.tt.insert(TEntry::new(self.board.hash, None, depth as u8, beta, NodeType::Beta));
                     if m.xpiece == 12 {
                         self.tt.inc_hh(m.piece, m.to, depth as i32);
@@ -230,8 +203,7 @@ impl <'a> Search<'a> {
                     node_type = NodeType::Pv;
                     best_move = Some(m);
                     alpha = score;
-                }
-
+                } 
             }
         }
         // if checkmate/stalemate
@@ -244,6 +216,7 @@ impl <'a> Search<'a> {
                     eval::CHECKMATE * mate_dist,
                     NodeType::Pv,
                 ));
+                
 
                 eval::CHECKMATE * mate_dist
             

@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use rand::prelude::*;
 
 use crate::{ Board, Move};
@@ -101,6 +103,7 @@ impl TTable {
         }
     }
 
+    #[inline(always)]
     pub fn get_bestmove(&self, hash: u64) -> Option<Move> {
         let entry = self.ttable[(hash & TTABLE_INDEX_MASK) as usize]; 
         
@@ -111,17 +114,21 @@ impl TTable {
         }
     }
 
+    #[inline(always)]
     pub fn insert(&mut self, entry: TEntry) {
-        // always replace
-        self.ttable[(entry.hash & TTABLE_INDEX_MASK) as usize] = entry;
+        if entry.node_type != NodeType::Pv {
+            self.ttable[(entry.hash & TTABLE_INDEX_MASK) as usize] = entry;
+        }
     }
 
-    pub fn get_hh(&self, piece: usize, to: usize) -> i32 {
-        self.hheuristic[piece][to] 
+    #[inline(always)]
+    pub fn get_hh(&self, piece: u8, to: u8) -> i32 {
+        self.hheuristic[piece as usize][to as usize] 
     }
 
-    pub fn inc_hh(&mut self, piece: usize, to: usize, depth: i32) {
-        self.hheuristic[piece][to] += depth*depth
+    #[inline(always)]
+    pub fn inc_hh(&mut self, piece: u8, to: u8, depth: i32) {
+        self.hheuristic[piece as usize][to as usize] += depth*depth
     }
 }
 

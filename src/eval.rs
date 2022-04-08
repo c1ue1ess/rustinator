@@ -1,28 +1,38 @@
-use crate::search::Search;
+use crate::board_info::{SQUARES, self, FA, FB, FILES, FH, FG, FC, FD, FE, FF};
+use crate::search::{Search, MAX_SEARCH_DEPTH};
 use crate::{ Board, Move, TTable };
 use crate::moves::MoveType;
-use crate::movegen::{ self, MoveOrderList };
+use crate::movegen::{self, bitscn_fw, in_check_now};
+use crate::move_ordering::{MoveOrderList, KillerMoves};
 
 const PAWN: i32 = 100;
 const KNIGHT: i32 = 400;
 const ROOK: i32 = 525;
 const BISHOP: i32 = 350;
-const QUEEN: i32 = 1200;
-const KING: i32 = 25000;
+const QUEEN: i32 = 1000;
+const KING: i32 = 100000;
 
 pub const PIECE_VALUE: [i32; 12] = [
-    PAWN, -PAWN,
-    KNIGHT, -KNIGHT,
-    ROOK, -ROOK,
-    BISHOP, -BISHOP,
-    QUEEN, -QUEEN,
-    KING, -KING
+    PAWN, PAWN,
+    KNIGHT, KNIGHT,
+    ROOK, ROOK,
+    BISHOP, BISHOP,
+    QUEEN, QUEEN,
+    KING, KING
 ];
 
-const BISHOP_PAIR_BONUS: i32 = 100;
+const BISHOP_PAIR_BONUS: i32 = 200;
 
 pub const CHECKMATE: i32 = -10000000;
 pub const STALEMATE: i32 = 0;
+
+pub const DOUBLED_PAWN_PEN: i32 = 20;
+pub const ISOLATED_PAWN_PEN: i32 = 40;
+pub const INNER_LEVER_BONUS: i32 = 25;
+pub const OUTTER_LEVER_BONUS: i32 = 15;
+pub const RAM_PEN: i32 = 20;
+pub const CHAIN_BONUS: i32 = 15;
+pub const SIDE_BONUS: i32 = 10;
 
 // piece tables based off of https://www.chessprogramming.org/Simplified_Evaluation_Function as i know nothing about chess
 
@@ -185,7 +195,7 @@ pub const PST: [[i8; 64]; 14] = [
 const CAPTURE_BONUS: i32 = 15;
 
 const PAWN_MOBILITY: i32 = 0;
-const KNIGHT_MOBILITY: i32 = 20;
+const KNIGHT_MOBILITY: i32 = 50;
 const ROOK_MOBILITY: i32 = 10;
 const BISHOP_MOBILITY: i32 = 15;
 // queen too agressive so brought this value down from 20
@@ -201,63 +211,74 @@ const PIECE_MOBILITY: [i32; 12] = [
     KING_MOBILITY, KING_MOBILITY
 ];
 
-pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, player: i32) -> i32 {
+pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, mate_dist: i32, player: i32) -> i32 {
+    // println!("entered q");
     let eval = evaluate(&mut search.board, player);
-
+    
     if eval >= beta {
         return beta;
     }
+    
     if alpha < eval {
         alpha = eval;
     }
 
-    // delta pruning
-    if eval < alpha - QUEEN {
-        return alpha;
-    }
-
-
-    // sort captures
-    let captures = MoveOrderList::new_pv_attacks(&search.board, movegen::gen_attk(&search.board), search.tt); 
+    let q_narrow = |search: &mut Search| {
+        let attks = movegen::gen_attk(&mut search.board);
+        MoveOrderList::new_quiesce(&mut search.board, &attks, search.tt)
+    };
+    let q_research = |search: &mut Search| {
+        let moves = movegen::gen_moves(&mut search.board);
+        MoveOrderList::new_quiesce_in_check(&mut search.board, &moves, search.tt)
+    };
     
+    let moves = [q_narrow, q_research];
     let mut no_moves = true;
     let mut checkmate = false;
     let mut score;
     
+    for moveset in moves {
+        let move_list = moveset(search);
     
-    for cap in captures {
-        search.board.make_no_hashing(&cap);
+        for m in move_list {
+            search.board.make_no_hashing(&m);
 
-        if movegen::in_check_next(&search.board) > 0
-        {
-            search.board.unmake_no_hashing(&cap);
-            checkmate = true;
-            continue;
+            if movegen::in_check_next(&search.board) > 0 {
+                search.board.unmake_no_hashing(&m);
+                checkmate = true;
+                continue;
+            } else if search.board.is_bad_pos() {
+                search.board.unmake_no_hashing(&m);
+                continue;
+            } else {
+                no_moves = false;
+                
+            }
+
+            score = -quiesce(search, -beta, -alpha, mate_dist-1, -player);
+            
+            search.board.unmake_no_hashing(&m);
+
+            if score >= beta {
+                return beta;
+            }
+            if score > alpha {
+                alpha = score;
+            }
+
+        }
+
+        if checkmate && no_moves {
+            //dbg!(no_moves);
+            //dbg!(checkmate);
         } else {
-            no_moves = false;
+            break;
         }
-
-        score = -quiesce(search, -beta, -alpha, -player);
-        
-        search.board.unmake_no_hashing(&cap);
-
-        if score >= beta {
-            return beta;
-        }
-        if score > alpha {
-            alpha = score;
-        }
-
     }
 
-    
-    if no_moves {
-        // if checkmate/stalemate
-        if checkmate && movegen::in_check_now(&search.board) > 0 {
-            CHECKMATE
-        } else {
-            STALEMATE
-        }
+    if no_moves && checkmate {
+        // println!("checkmate in q at {mate_dist}");
+        CHECKMATE
     } else {
         alpha
     }
@@ -265,14 +286,15 @@ pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, player: i32) -> i
 
 
 
+
+
 pub fn evaluate(b: &mut Board, player: i32) -> i32 {
     let mut eval = mat_balance(b);
     eval += pos_balance(b); 
     eval += mobility(b);
-    
+    eval += pawn_structure(b);
     eval *= player;
-    
-    
+        
     eval
 
     
@@ -291,9 +313,10 @@ fn mat_balance(b: &Board) -> i32 {
     let bishops = BISHOP * (w_bishop_count - b_bishop_count) + w_bishop_bonus - b_bishop_bonus;
 
     let queens = QUEEN * (b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
-    let kings = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
+    // dont need kings makes no difference
+    //let kings = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
 
-    pawns + knights + rooks + bishops + queens + kings
+    pawns + knights + rooks + bishops + queens //+ kings
 }
 
 fn pos_balance(b: &Board) -> i32 {
@@ -335,13 +358,13 @@ fn mobility(b: &mut Board) -> i32 {
 
     b.colour = 0;
     for m in movegen::gen_moves(b) {
-        mob += PIECE_MOBILITY[m.piece];
+        mob += PIECE_MOBILITY[m.piece as usize];
         mob += if m.move_type ==  MoveType::Capture { CAPTURE_BONUS  } else { 0 };
     }
     
     b.colour = 1;
     for m in movegen::gen_moves(b) {
-        mob -= PIECE_MOBILITY[m.piece];
+        mob -= PIECE_MOBILITY[m.piece as usize];
         mob -= if m.move_type ==  MoveType::Capture { CAPTURE_BONUS } else { 0 };
     }
     
@@ -350,24 +373,137 @@ fn mobility(b: &mut Board) -> i32 {
     mob
 }
 
-// #[test]
-// fn ev_score() {
-//     // let mut w = Board::new_from_fen("pnrbqk2/8/8/8/8/8/PNRBQK2/PNRBQK2 w - - 0 10");
-//     // let mut b = Board::new_from_fen("PNRBQK2/8/8/8/8/8/pnrbqk2/pnrbqk2 b - - 0 10");
-//     // let mut b = Board::new_from_fen("pnrbqk2/pnrbqk2/8/8/8/8/8/PNRBQK2 b - - 0 10");
+fn pawn_structure(b: &Board) -> i32 {
+    let mut pawns = 0;
+    
+    // reward connected pawns and penalising isolated and doubled pawns
+    pawns += pawn_chains(b);
+    // levers good
+    pawns += pawn_levers(b);
+    // no rams are bad apparently
+    pawns += pawn_rams(b);
+    //doubled bad
+    pawns += doubled_pawns(b);
+    //backwards also bad
+    pawns += isolated_pawns(b);
 
-//     let mut w = Board::new();
-//     let mut b = Board::new();
-//     b.colour = 1;
+    pawns
+}
 
-//     assert_eq!(quiesce(&mut w, i32::MIN+1, i32::MAX, 1), quiesce(&mut b, i32::MIN+1, i32::MAX, -1));
-//     let mut w_search = crate::search::Search { board: w, prev_moves: std::collections::HashMap::new() };
-//     let mut b_search = crate::search::Search { board: b, prev_moves: std::collections::HashMap::new() };
+fn doubled_pawns(b: &Board) -> i32 {
+    let mut doubled = 0;
+    for rank in board_info::RANKS {
+        if (b.pieces[0] & rank).count_ones() > 1 {
+            doubled -= DOUBLED_PAWN_PEN;
+        }
+        if (b.pieces[1] & rank).count_ones() > 1 {
+            doubled += DOUBLED_PAWN_PEN;
+        }
+    }
 
-//     let depth = 11;
+    doubled
+}
 
-//     let w_score = crate::search::root_search(&mut w_search, None, depth, &std::time::Instant::now(), &mut crate::search::TTable::new()).0;
-//     let b_score = crate::search::root_search(&mut b_search, None, depth, &std::time::Instant::now(), &mut crate::search::TTable::new()).0;
+fn isolated_pawns(b: &Board) -> i32 {
+    let mut iso = 0;
 
-//     assert_eq!(w_score, b_score)
-// }
+    // file a
+    if (b.pieces[0] & FA) > 0 && (b.pieces[0] & FB) == 0 {
+        iso -= ISOLATED_PAWN_PEN;
+    }
+    if (b.pieces[1] & FA) > 0 && (b.pieces[1] & FB) == 0 {
+        iso += ISOLATED_PAWN_PEN;
+    }
+    // middle files
+    for i in 1..7 {
+        if  (b.pieces[0] & FILES[i]) > 0 && 
+            (b.pieces[0] & (FILES[i-1] | FILES[i+1])) == 0 {
+            iso -= ISOLATED_PAWN_PEN;
+        }
+        if (b.pieces[1] & FILES[i]) > 0 && (b.pieces[1] & (FILES[i-1] | FILES[i+1])) == 0 {
+            iso += ISOLATED_PAWN_PEN;
+        }
+    }
+    // file h
+    if (b.pieces[0] & FH) > 0 && (b.pieces[0] & FG) == 0 {
+        iso -= ISOLATED_PAWN_PEN;
+    }
+    if (b.pieces[1] & FH) > 0 && (b.pieces[1] & FG) == 0 {
+        iso += ISOLATED_PAWN_PEN;
+    }
+
+    iso
+}
+
+fn pawn_levers(b: &Board) -> i32 {
+    let mut lever = 0;
+
+    let left = b.pieces[0] & FA & FB & FC & FD;
+    let right = b.pieces[0] & FE & FF & FG & FH;
+    
+    // inner levers
+    lever += ((left << 9) & b.pieces[1]).count_ones() as i32 * INNER_LEVER_BONUS;
+    lever += ((right << 7) & b.pieces[1]).count_ones() as i32 * INNER_LEVER_BONUS;
+    // outter levers
+    lever += (((left & !FA) << 7) & b.pieces[1]).count_ones() as i32 * OUTTER_LEVER_BONUS;
+    lever += (((right & !FH) << 9) & b.pieces[1]).count_ones() as i32 * OUTTER_LEVER_BONUS;
+
+    let left = b.pieces[1] & FA & FB & FC & FD;
+    let right = b.pieces[1] & FE & FF & FG & FH;
+    //inner leavers
+    lever -= ((left >> 7) & b.pieces[0]).count_ones() as i32 * INNER_LEVER_BONUS;
+    lever -= ((right >> 9) & b.pieces[0]).count_ones() as i32 * INNER_LEVER_BONUS;
+    // outter leavers
+    lever -= (((left & !FA) >> 9) & b.pieces[0]).count_ones() as i32 * OUTTER_LEVER_BONUS;
+    lever -= (((right & !FH) >> 7) & b.pieces[0]).count_ones() as i32 * OUTTER_LEVER_BONUS;
+
+    lever
+}
+
+fn pawn_rams(b:&Board) -> i32 {
+    let mut rams = 0;
+
+    rams -= ((b.pieces[0] << 8) & b.pieces[1]).count_ones() as i32 * RAM_PEN;
+    // rams -= ((b.pieces[1] >> 8) & b.pieces[0]).count_ones() as i32 * RAM_BONUS;
+    
+    rams
+}
+
+fn pawn_chains(b: &Board) -> i32 {
+    let mut chains = 0;
+    // left chains white
+    chains += (b.pieces[0] & ((b.pieces[0] & !FH) << 9)).count_ones() as i32 * CHAIN_BONUS;
+    // right chains white
+    chains += (b.pieces[0] & ((b.pieces[0] & !FA) << 7)).count_ones() as i32 * CHAIN_BONUS;
+
+    // left chains black
+    chains -= (b.pieces[1] & ((b.pieces[1] & !FH) >> 7)).count_ones() as i32 * CHAIN_BONUS;
+    // right chains black
+    chains -= (b.pieces[1] & ((b.pieces[1] & !FA) >> 9)).count_ones() as i32 * CHAIN_BONUS;
+    
+    chains
+}
+
+fn pawn_side_by_side(b: &Board) -> i32 {
+    let mut sbs = 0;
+
+    sbs += (b.pieces[0] & ((b.pieces[0] & !FH) << 1)).count_ones() as i32 * SIDE_BONUS;
+    sbs -= (b.pieces[1] & ((b.pieces[1] & !FH) << 1)).count_ones() as i32 * SIDE_BONUS;
+
+    sbs
+}
+
+
+
+#[test]
+fn pawn_score() {
+    
+    let mut b = Board::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
+    // let p = pawn_rams(&b);
+
+    let white = evaluate(&mut b, 1);
+    let black = evaluate(&mut b, -1);
+    assert_eq!(white, -black);
+    // assert_eq!(p, RAM_PEN)
+    // assert_eq!(p, 0)
+}

@@ -3,7 +3,14 @@ use std::fs;
 use crate::{ Board, Move };
 use crate::movegen;
 
-pub const WHITE_OPENS: [&str; 2200] = [
+pub struct Book {
+    white_opens: Vec<&'static str>,
+    black_opens: Vec<&'static str>,
+}
+
+impl Book {
+    pub fn new() -> Book {
+        Book { white_opens: vec![
     "position startpos moves e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6 b1c3 e7e5 d4b5 d7d6 c1g5 a7a6 b5a3 b7b5 c3d5 f8e7 g5f6 e7f6",
     "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 e8g8 c2c3 d7d5 e4d5 f6d5 f3e5 c6e5",
     "position startpos moves e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 c8f5 e4g3 f5g6 g1f3 b8d7 h2h4 h7h6 h4h5 g6h7 f1d3 h7d3 d1d3 e7e6",
@@ -2204,9 +2211,9 @@ pub const WHITE_OPENS: [&str; 2200] = [
     "position startpos moves e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6 b1c3 e7e5 d4b5 d7d6 c1g5 a7a6 b5a3 c8e6 a3c4 c6d4 c4e3 a8c8", 
     "position startpos moves e2e4 e7e6 f2f4 d7d5 e4e5 c7c5 b2b4 b8c6 a2a3 c5b4 g1f3 b4a3 a1a3 f8a3 c1a3 g8e7 d2d4 e8g8 c2c3 f8e8", 
     "position startpos moves e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 b8c6 g1f3 d8b6 f1d3 c8d7 d4c5 f8c5 e1g1 g8e7 b2b4 c6b4 c3b4 c5b4",
-];
+],
 
-pub const BLACK_OPENS: [&str; 2200]= [
+black_opens: vec![
     "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 e8g8 c2c3 d7d5 e4d5 f6d5 f3e5 c6e5",
     "position startpos moves e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6 b1c3 e7e5 d4b5 d7d6 c1g5 a7a6 b5a3 b7b5 c3d5 f8e7 g5f6 e7f6",
     "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 b7b5 a4b3 f8e7 f1e1 e8g8 c2c3 d7d5 e4d5 f6d5 f3e5 c6e5",
@@ -4407,48 +4414,49 @@ pub const BLACK_OPENS: [&str; 2200]= [
     "position startpos moves e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6 c1g5 e7e6 f2f4 f8e7 d1f3 d8c7 e1c1 b8d7 f1d3 h7h6", 
     "position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d4 e5d4 c3d4 c5b4 c1d2 b4d2 b1d2 e8g8 e1g1 d7d5 e4d5 f6d5", 
     "position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d4 e5d4 c3d4 c5b4 b1c3 d7d5 e4d5 f6d5 e1g1 b4c3 b2c3 e8g8", 
-];
-
-pub fn get_opening_move(position: &str) -> bool {
-   dbg!(position);
-
-    let mut move_num = position.split(' ').count();
-    
-    // account for missing "moves" command
-    if move_num == 2 {
-        move_num = 3;
-    } 
-    //if blacks turn to move
-    let mut opening_move = String::new();
-    if move_num % 2 == 0 {
-        for m in BLACK_OPENS {
-            if m.starts_with(position) {
-                opening_move = String::from(m);
-                break;
-            }
-        } 
-    } else {
-        for m in WHITE_OPENS {
-            if m.starts_with(position) {
-                opening_move = String::from(m);
-                break;
-            }
-        } 
-    } 
-
-    if opening_move.is_empty() {
-        return false;
-    }
-
-
-    let moves: Vec<&str> = opening_move.split(' ').collect();
-    
-    for (i, m) in moves.iter().enumerate() {
-        if i == move_num {
-            println!("bestmove {m}");
-            return true;
+],
         }
     }
-    
-    false 
+
+
+    pub fn get_opening_move(&self, position: &str) -> bool {
+        let mut move_num = position.split(' ').count();
+
+        // account for missing "moves" command
+        if move_num == 2 {
+            move_num = 3;
+        } 
+        //if blacks turn to move
+        let mut opening_move = String::new();
+        if move_num % 2 == 0 {
+            for m in &self.black_opens {
+                if m.starts_with(position) {
+                    opening_move = String::from(*m);
+                    break;
+                }
+            } 
+        } else {
+            for m in &self.white_opens {
+                if m.starts_with(position) {
+                    opening_move = String::from(*m);
+                    break;
+                }
+            } 
+        } 
+
+        if opening_move.is_empty() {
+            return false;
+        }
+
+        let moves: Vec<&str> = opening_move.split(' ').collect();
+
+        for (i, m) in moves.iter().enumerate() {
+            if i == move_num {
+                println!("bestmove {m}");
+                return true;
+            }
+        }
+
+        false 
+    }
 }

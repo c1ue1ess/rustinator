@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::ops::Index;
 use std::slice::SliceIndex;
 
@@ -6,200 +7,25 @@ use crate::moves::MoveType;
 use crate::eval;
 use crate::board_info::*;
 
-
-
-pub struct MoveOrderList {
-    pub move_scores: Vec<(Move, i32)>,
-}
-
-impl MoveOrderList {
-    pub fn new(b: &Board, moves: Vec<Move>, tt: &TTable) -> MoveOrderList {
-        let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(moves.len());
-        
-        for m in moves {
-            move_scores.push((m, score_move(b, &m, tt)));
-            //move_scores.push((m, 0));
-
-        }
-        
-        MoveOrderList { move_scores }
-    }
-
-    
-
-    pub fn len(&self) -> usize {
-        self.move_scores.len()
-    }
-
-    pub fn new_pv_attacks(b: &Board, mut moves: Vec<Move>, tt: &TTable) -> MoveOrderList {
-        let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(moves.len());
-        
-        let bestmove = tt.get_bestmove(b.hash);
-
-        for m in moves {
-            //add pv to hash if one exists
-            if bestmove == Some(m){
-                move_scores.push((m, i32::MAX));
-                continue;
-            }
-             
-            move_scores.push((m, score_attacks(b, &m, tt)));
-            // move_scores.push((m, 0));
-
-        }
-
-
-        MoveOrderList { move_scores }
-    }
-
-    pub fn new_quiet(b: &Board, moves: Vec<Move>, tt: &TTable) -> MoveOrderList {
-        let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(moves.len());
-        
-        let bestmove = tt.get_bestmove(b.hash);
-
-        for m in moves {
-            //add pv to hash if one exists
-            if bestmove == Some(m){
-                move_scores.push((m, i32::MAX));
-                continue;
-            }
-             
-            move_scores.push((m, score_quiet(b, &m, tt)));
-            // move_scores.push((m, 0));
-
-        }
-
-
-        MoveOrderList { move_scores }
-    }
-
-    pub fn new_root(b: &Board, tt: &TTable, last_best: Option<Move>) -> MoveOrderList {
-        let captures = gen_attk(b);
-        let quiet = gen_quiet(b);
-        
-        let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(captures.len() + quiet.len());
-
-        let bestmove = tt.get_bestmove(b.hash);
-        
-        for m in captures {
-            if bestmove == Some(m){
-                move_scores.push((m, i32::MAX-1));
-                continue;
-            } else if last_best == Some(m) {
-                move_scores.push((m, i32::MAX));
-                continue;
-            }
-
-            move_scores.push((m, score_attacks(b, &m, tt)));
-            // move_scores.push((m, 0));
-        }
-        
-        for m in quiet {
-            if bestmove == Some(m){
-                move_scores.push((m, i32::MAX-1));
-                continue;
-            } else if last_best == Some(m) {
-                move_scores.push((m, i32::MAX));
-                continue;
-            }
-
-            move_scores.push((m, score_quiet(b, &m, tt)));
-            // move_scores.push((m, 0));
-
-        }
-
-
-        MoveOrderList { move_scores }
-    }
-
-    pub fn new_quiesce(b: &Board, mut moves: Vec<Move>, tt: &TTable) -> MoveOrderList {
-        let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(moves.len());
-
-        for m in moves {
-            // add pv to hash if one exists
-            move_scores.push((m, score_attacks(b, &m, tt)));    
-            // move_scores.push((m, 0));
-        }
-
-
-        MoveOrderList { move_scores }
-    }
-
-}
-
-
-impl Iterator for MoveOrderList {
-    type Item = Move;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut highest = i32::MIN;
-        let mut index: usize = 0;
-
-        for (i, (m, score)) in self.move_scores.iter().enumerate() {
-            if *score > highest {
-                highest = *score;
-                index = i;
-            }
-        }
-
-        if highest == i32::MIN {
-            None
-        } else {
-            // set score to min so that it never gets picked again
-            self.move_scores[index].1 = i32::MIN;
-            Some(self.move_scores[index].0)
-        }
-
-        
-    }
-}
-
-fn score_move(b: &Board, m: &Move, tt: &TTable) -> i32 {
-    // if hashtable bestmove
-    if let Some(bestmove) = tt.get_bestmove(b.hash) {
-        if bestmove == *m {
-            return i32::MAX;
-        }
-    } 
-    
-    // if capture use mvv-lva
-    if m.xpiece < 12 {
-        m.xpiece as i32 - m.piece as i32 + 100000
-    // if quiet move see if the to square is beneficial or not
-    } else {
-        tt.get_hh(m.piece, m.to)
-    }
-}
-
-fn score_attacks(b: &Board, m: &Move, tt: &TTable) -> i32 {
-    //mvv-lva
-    m.xpiece as i32 - m.piece as i32 + 100000 // add offset so no overlap with history heuristics
-}
-
-fn score_quiet(b: &Board, m: &Move, tt: &TTable) -> i32 {
-    tt.get_hh(m.piece, m.to)
-}
-
+const MAX_MOVES: usize = 300;
+const MAX_CAPTURES: usize = 75;
+const MAX_QUIET: usize = 100;
 
 pub fn gen_attk(b: &Board) -> Vec<Move> {
-    let mut attk = Vec::with_capacity(256);
+    let mut attk = Vec::with_capacity(MAX_MOVES);
     all_attk(&mut attk, b);
     attk
 }
 
 pub fn gen_quiet(b: &Board) -> Vec<Move> {
-    let mut quiet = Vec::with_capacity(256);
+    let mut quiet = Vec::with_capacity(MAX_MOVES);
     all_quiet(&mut quiet, b);
     quiet
 }
 
 pub fn gen_moves(b: &Board) -> Vec<Move> {
-    let mut moves = Vec::with_capacity(300);
+    let mut moves = Vec::with_capacity(MAX_MOVES);
     all_attk(&mut moves, b);
-
-    // sort attacks by most valuable capture
-    //moves.sort_unstable_by(|a, b| a.xpiece.cmp(&b.xpiece).reverse());
-    
     all_quiet(&mut moves, b);
     
     moves
@@ -247,16 +73,16 @@ fn add_wp_quiet(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_fw(&quiet);
             if to > 55 {
                 for i in [8, 4, 2, 6] {
-                    moves.push(Move::new_promo(from, to, 0, b.ep, b, i));
+                    moves.push(Move::new_promo(from as u8, to as u8, 0, b.ep, b, i));
                 }
             } else {
-                moves.push(Move::new_quiet(from, to, 0, b.ep, b));
+                moves.push(Move::new_quiet(from as u8, to as u8, 0, b.ep, b));
             }
 
             quiet &= quiet - 1;
             if quiet > 0 {
                 to = bitscn_fw(&quiet);
-                moves.push(Move::new_double_push(from, to, 0, b.ep, b));
+                moves.push(Move::new_double_push(from as u8, to as u8, 0, b.ep, b));
             }
         }
 
@@ -277,12 +103,12 @@ fn add_wp_attk(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_fw(&attk);
             if to > 55 {
                 for i in [8, 4, 2, 6] {
-                    moves.push(Move::new_promo_capture( from, to, 0, get_xpiece(to, b), b.ep, b, i));
+                    moves.push(Move::new_promo_capture( from as u8, to as u8, 0, get_xpiece(to, b) as u8, b.ep, b, i));
                 }
             } else if to as u8 == b.ep {
-                moves.push(Move::new_ep_capture(from, to, 0, 1, b.ep, b));
+                moves.push(Move::new_ep_capture(from as u8, to as u8, 0, 1, b.ep, b));
             } else {
-                moves.push(Move::new_capture( from, to, 0, get_xpiece(to, b), b.ep, b));
+                moves.push(Move::new_capture( from as u8, to as u8, 0, get_xpiece(to, b) as u8, b.ep, b));
             }
             
             attk &= attk - 1;
@@ -305,16 +131,16 @@ fn add_bp_quiet(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_rv(&quiet);
             if to < 8 {
                 for i in [9, 5, 3, 7] {
-                    moves.push(Move::new_promo(from, to, 1, b.ep, b, i));
+                    moves.push(Move::new_promo(from as u8, to as u8, 1, b.ep, b, i));
                 }
             } else {
-                moves.push(Move::new_quiet(from, to, 1, b.ep, b));
+                moves.push(Move::new_quiet(from as u8, to as u8, 1, b.ep, b));
             }
 
             quiet ^= SQUARES[to];
             if quiet > 0 {
                 to = bitscn_fw(&quiet);
-                moves.push(Move::new_double_push(from, to, 1, b.ep, b));
+                moves.push(Move::new_double_push(from as u8, to as u8, 1, b.ep, b));
             }
         }
 
@@ -336,12 +162,12 @@ fn add_bp_attk(moves: &mut Vec<Move>, b: &Board) {
             to = bitscn_fw(&attk);
             if to < 8 {
                 for i in [9, 5, 3, 7] {
-                    moves.push(Move::new_promo_capture( from, to, 1, get_xpiece(to, b), b.ep, b, i));
+                    moves.push(Move::new_promo_capture( from as u8, to as u8, 1, get_xpiece(to, b) as u8, b.ep, b, i));
                 }
             } else if to as u8 == b.ep {
-                moves.push(Move::new_ep_capture(from, to, 1, 0, b.ep, b));
+                moves.push(Move::new_ep_capture(from as u8, to as u8, 1, 0, b.ep, b));
             } else {
-                moves.push(Move::new_capture( from, to, 1, get_xpiece(to, b), b.ep, b));
+                moves.push(Move::new_capture( from as u8, to as u8, 1, get_xpiece(to, b) as u8, b.ep, b));
             }
 
             attk &= attk - 1;
@@ -363,7 +189,7 @@ fn add_knight_quiet(moves: &mut Vec<Move>, b: &Board) {
         
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet(from,to,2 + b.colour,b.ep,b));
+            moves.push(Move::new_quiet(from as u8,to as u8,(2 + b.colour) as u8,b.ep,b));
             quiet &= quiet - 1;
         }
         knights &= knights - 1;
@@ -383,7 +209,7 @@ fn add_knight_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture( from, to, 2 + b.colour, get_xpiece(to, b), b.ep, b));
+            moves.push(Move::new_capture( from as u8, to as u8, (2 + b.colour) as u8, get_xpiece(to, b) as u8, b.ep, b));
             attk &= attk - 1;
         }
         knights &= knights - 1;
@@ -403,7 +229,7 @@ fn add_rook_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet( from, to, 4 + b.colour, b.ep, b));
+            moves.push(Move::new_quiet( from as u8, to as u8, (4 + b.colour) as u8, b.ep, b));
             quiet &= quiet - 1;
         }
         rooks &= rooks - 1;
@@ -423,7 +249,7 @@ fn add_rook_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture( from, to, 4 + b.colour, get_xpiece(to, b), b.ep, b));
+            moves.push(Move::new_capture( from as u8, to as u8, (4 + b.colour) as u8, get_xpiece(to, b) as u8, b.ep, b));
             attk &= attk - 1;
         }
         rooks &= rooks - 1;
@@ -443,7 +269,7 @@ fn add_bishop_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet( from, to, 6 + b.colour, b.ep, b));
+            moves.push(Move::new_quiet( from as u8, to as u8, (6 + b.colour) as u8, b.ep, b));
             quiet &= quiet - 1;
         }
         bishops &= bishops - 1;
@@ -462,7 +288,7 @@ fn add_bishop_attk(moves: &mut Vec<Move>, b: &Board) {
         attk = m & b.util[1 - b.colour];
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture( from, to, 6 + b.colour, get_xpiece(to, b), b.ep, b));
+            moves.push(Move::new_capture( from as u8, to as u8, (6 + b.colour) as u8, get_xpiece(to, b) as u8, b.ep, b));
             attk &= attk - 1;
         }
         bishops &= bishops - 1;
@@ -482,7 +308,7 @@ fn add_queen_quiet(moves: &mut Vec<Move>, b: &Board) {
 
         while quiet > 0 {
             to = bitscn_fw(&quiet);
-            moves.push(Move::new_quiet( from, to, 8 + b.colour, b.ep, b));
+            moves.push(Move::new_quiet( from as u8, to as u8, (8 + b.colour) as u8, b.ep, b));
             quiet &= quiet - 1;
         }
         queens &= queens - 1;
@@ -502,7 +328,7 @@ fn add_queen_attk(moves: &mut Vec<Move>, b: &Board) {
 
         while attk > 0 {
             to = bitscn_fw(&attk);
-            moves.push(Move::new_capture( from, to, 8 + b.colour, get_xpiece(to, b), b.ep, b));
+            moves.push(Move::new_capture( from as u8, to as u8, (8 + b.colour) as u8, get_xpiece(to, b) as u8, b.ep, b));
             attk &= attk - 1;
         }
         queens &= queens - 1;
@@ -524,12 +350,12 @@ pub fn add_king_quiet(moves: &mut Vec<Move>, b: &Board) {
             quiet &= quiet - 1;
             continue;
         }
-        moves.push(Move::new_quiet( from, to, 10 + b.colour, b.ep, b));
+        moves.push(Move::new_quiet( from as u8, to as u8, (10 + b.colour) as u8, b.ep, b));
         quiet &= quiet - 1;
     }
 
     // no need to check castle moves if king is in check
-    if attacks_to(b, from, b.colour) > 0 { return; }
+    if in_check_now(b) > 0 { return; }
     
     if b.colour == 0
         && (b.castle_state & 0b1000) > 0
@@ -609,10 +435,10 @@ pub fn add_king_attk(moves: &mut Vec<Move>, b: &Board) {
             continue;
         }
         moves.push(Move::new_capture(
-            from,
-            to,
-            10 + b.colour,
-            get_xpiece(to, b),
+            from as u8,
+            to as u8,
+            (10 + b.colour) as u8,
+            get_xpiece(to, b) as u8,
             b.ep,
             b,
         ));
@@ -620,10 +446,12 @@ pub fn add_king_attk(moves: &mut Vec<Move>, b: &Board) {
     }
 }
 
+#[inline(always)]
 pub fn bitscn_fw(bb: &u64) -> usize {
     bb.trailing_zeros() as usize
 }
 
+#[inline(always)]
 pub fn bitscn_rv(bb: &u64) -> usize {
     (bb.leading_zeros() ^ 63) as usize
 }
@@ -686,6 +514,7 @@ fn bpawn_attk(index: usize, b: &Board) -> u64 {
     (down_left | down_right) & (b.util[0] | SQUARES[b.ep as usize])
 }
 
+#[inline]
 fn pos_ray(dir: usize, sq: usize, b: &Board) -> u64 {
     let mv = RAYS[dir][sq];
     let blk = mv & b.util[2];
@@ -693,6 +522,7 @@ fn pos_ray(dir: usize, sq: usize, b: &Board) -> u64 {
     mv ^ RAYS[dir][b_index] 
 }
 
+#[inline]
 fn neg_ray(dir: usize, sq: usize, b: &Board) -> u64 {
     let mv = RAYS[dir][sq];
     let blk = mv & b.util[2] | 1;
@@ -714,14 +544,6 @@ fn queen_moves(sq: usize, b: &Board) -> u64 {
 }
 
 
-
-
-
-
-
-
-
-#[inline(always)]
 pub fn attacks_to(b: &Board, piece_index: usize, colour: usize) -> u64 {
     let pawn: u64 = if colour == 0 {
         wpawn_attk(piece_index, b) & b.pieces[1]
@@ -762,17 +584,28 @@ pub fn in_check_now(b: &Board) -> u64 {
 
 
 pub fn get_xpiece(sq: usize, b: &Board) -> usize {
-    if (SQUARES[sq] & b.pieces[1 - b.colour]) > 0 {
+    let mut square = SQUARES[sq];
+
+    // for i in 0..5 {
+    //     if square & b.pieces[i*2+1-b.colour] > 0 {
+    //         return i*2+1-b.colour
+    //     }
+    // }
+
+    // 12
+    
+    
+    if (square & b.pieces[1 - b.colour]) > 0 {
         1 - b.colour
-    } else if (SQUARES[sq] & b.pieces[3 - b.colour]) > 0 {
+    } else if (square & b.pieces[3 - b.colour]) > 0 {
         3 - b.colour
-    } else if (SQUARES[sq] & b.pieces[5 - b.colour]) > 0 {
+    } else if (square & b.pieces[5 - b.colour]) > 0 {
         5 - b.colour
-    } else if (SQUARES[sq] & b.pieces[7 - b.colour]) > 0 {
+    } else if (square & b.pieces[7 - b.colour]) > 0 {
         7 - b.colour
-    } else if (SQUARES[sq] & b.pieces[9 - b.colour]) > 0 {
+    } else if (square & b.pieces[9 - b.colour]) > 0 {
         9 - b.colour
-    } else if (SQUARES[sq] & b.pieces[11 - b.colour]) > 0 {
+    } else if (square & b.pieces[11 - b.colour]) > 0 {
         11 - b.colour
     } else {
         12
@@ -780,22 +613,52 @@ pub fn get_xpiece(sq: usize, b: &Board) -> usize {
 }
 
 pub fn get_piece(sq: usize, b: &Board) -> usize {
-    if (SQUARES[sq] & b.pieces[b.colour]) > 0 {
+    let mut square = SQUARES[sq];
+
+    // for i in 0..5 {
+    //     if square & b.pieces[i*2+b.colour] > 0 {
+    //         return i*2+b.colour
+    //     }
+    // }
+    
+    // 12
+
+    if (square & b.pieces[b.colour]) > 0 {
 		b.colour
-	} else if (SQUARES[sq] & b.pieces[2 + b.colour]) > 0 {
+	} else if (square & b.pieces[2 + b.colour]) > 0 {
 		2 + b.colour
-	} else if (SQUARES[sq] & b.pieces[4 + b.colour]) > 0 {
+	} else if (square & b.pieces[4 + b.colour]) > 0 {
 		4 + b.colour
-	} else if (SQUARES[sq] & b.pieces[6 + b.colour]) > 0 {
+	} else if (square & b.pieces[6 + b.colour]) > 0 {
 		6 + b.colour
-	} else if (SQUARES[sq] & b.pieces[8 + b.colour]) > 0 {
+	} else if (square & b.pieces[8 + b.colour]) > 0 {
 		8 + b.colour
-	} else if (SQUARES[sq] & b.pieces[10 + b.colour]) > 0 {
+	} else if (square & b.pieces[10 + b.colour]) > 0 {
 		10 + b.colour
 	} else {
         12
     }
 }
+
+
+
+// #[test]
+// pub fn getting_pieces() {
+//     let mut b = Board::new();
+
+//     assert_eq!(get_piece(8, &b), 0);
+//     assert_eq!(get_piece(60, &b), 12);
+//     assert_eq!(get_piece(0, &b), 4);
+
+    
+//     assert_eq!(get_xpiece(55, &b), 1);
+//     assert_eq!(get_xpiece(5, &b), 12);
+//     assert_eq!(get_xpiece(60, &b), 11);
+
+
+// }
+
+
 
 // #[allow(dead_code)]
 // prints a bit board over the top of a board

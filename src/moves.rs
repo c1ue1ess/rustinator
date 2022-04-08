@@ -39,18 +39,18 @@ impl fmt::Display for MoveType {
 
 #[derive(Debug, Copy ,Clone, PartialEq)]
 pub struct Move {
-    pub from: usize,
-    pub to: usize,
-    pub piece: usize,
+    pub from: u8,
+    pub to: u8,
+    pub piece: u8,
 
     pub move_type: MoveType,
 
     pub ep: u8,    
-    pub xpiece: usize,
+    pub xpiece: u8,
     pub castle_rights: u8,
-    pub promo_piece: usize,
+    pub promo_piece: u8,
 
-    pub last_halfmove: usize,
+    pub last_halfmove: u8,
 
 }
 
@@ -67,8 +67,8 @@ ep: {}    xpiece: {}    castle rights: {}    promo piece: {}",
 }
 
 impl Move {
-    pub fn new_quiet(from: usize, to: usize, 
-            piece: usize, ep: u8, board: &Board) -> Move {
+    pub fn new_quiet(from: u8, to: u8, 
+            piece: u8, ep: u8, board: &Board) -> Move {
         
         Move { 
             from, 
@@ -84,8 +84,8 @@ impl Move {
         }
     }
 
-    pub fn new_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, board: &Board) -> Move {
+    pub fn new_capture(from: u8, to: u8, 
+            piece: u8, xpiece: u8, ep: u8, board: &Board) -> Move {
         
         Move { 
             from, 
@@ -102,8 +102,8 @@ impl Move {
         }    
     }
 
-    pub fn new_double_push(from: usize, to: usize, 
-            piece: usize, ep: u8, board: &Board) -> Move {
+    pub fn new_double_push(from: u8, to: u8, 
+            piece: u8, ep: u8, board: &Board) -> Move {
         Move { 
             from, 
             to, 
@@ -118,8 +118,8 @@ impl Move {
         }                
     }
 
-    pub fn new_ep_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, board: &Board) -> Move {
+    pub fn new_ep_capture(from: u8, to: u8, 
+            piece: u8, xpiece: u8, ep: u8, board: &Board) -> Move {
         Move { 
             from, 
             to, 
@@ -133,8 +133,8 @@ impl Move {
             last_halfmove: board.halfmove,
         }
     }
-    pub fn new_promo(from: usize, to: usize, 
-            piece: usize, ep: u8, board: &Board, promo_piece: usize) -> Move {
+    pub fn new_promo(from: u8, to: u8, 
+            piece: u8, ep: u8, board: &Board, promo_piece: u8) -> Move {
 
         Move { 
             from, 
@@ -150,8 +150,8 @@ impl Move {
         }
     }
     
-    pub fn new_promo_capture(from: usize, to: usize, 
-            piece: usize, xpiece: usize, ep: u8, board: &Board, promo_piece: usize) -> Move {
+    pub fn new_promo_capture(from: u8, to: u8, 
+            piece: u8, xpiece: u8, ep: u8, board: &Board, promo_piece: u8) -> Move {
 
         Move { 
             from, 
@@ -168,8 +168,8 @@ impl Move {
 }
 
     
-    pub fn new_castle(from: usize, to: usize, 
-            piece: usize, ep: u8, board: &Board, castle_move: MoveType) -> Move {
+    pub fn new_castle(from: u8, to: u8, 
+            piece: u8, ep: u8, board: &Board, castle_move: MoveType) -> Move {
         Move {
             from, 
             to, 
@@ -185,8 +185,8 @@ impl Move {
     } 
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
-        let from = sq_from_text(&text[0..2]);
-        let to = sq_from_text(&text[2..4]);
+        let from = sq_from_text(&text[0..2]) as u8;
+        let to = sq_from_text(&text[2..4]) as u8;
         
         let promo = if text.len() == 5 {
             Some(promo_piece_from_text(&text[4..]) + b.colour)
@@ -194,11 +194,11 @@ impl Move {
             None
         };
 
-        let promo_piece = promo.unwrap_or(12);
+        let promo_piece= (promo.unwrap_or(12)) as u8;
 
 
-        let piece = movegen::get_piece(from, b);
-        let xpiece = movegen::get_xpiece(to, b);
+        let piece = movegen::get_piece(from as usize, b) as u8;
+        let xpiece = movegen::get_xpiece(to as usize, b) as u8;
 
         let mut move_type = MoveType::Quiet;
 
@@ -247,8 +247,8 @@ impl Move {
     pub fn as_uci_string(&self) -> String {
         let mut m = String::new();
 
-        m.push_str(SQ_NAMES[self.from]);
-        m.push_str(SQ_NAMES[self.to]);
+        m.push_str(SQ_NAMES[self.from as usize]);
+        m.push_str(SQ_NAMES[self.to as usize]);
         m.push_str(&text_from_promo_piece(self.promo_piece));
         m
     }
@@ -270,7 +270,7 @@ fn promo_piece_from_text(p: &str) -> usize {
     }
 }
 
-fn text_from_promo_piece(promo_piece: usize) -> String {
+fn text_from_promo_piece(promo_piece: u8) -> String {
     match promo_piece {
         2 | 3 => String::from("n"),
         4 | 5 => String::from("r"),
