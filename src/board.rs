@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
 
 use crate::{ Move, TTable };
 use crate::moves::MoveType;
@@ -19,6 +17,8 @@ pub struct Board {
 
     pub ep: u8,
     pub castle_state: u8,
+    pub whas_castled: bool,
+    pub bhas_castled: bool,
 
     pub halfmove: u8,
     pub fullmove: u8,
@@ -35,6 +35,8 @@ impl Board {
             colour: 0,
             ep: 64,
             castle_state: 0b1111,
+            whas_castled: false,
+            bhas_castled: false,
             halfmove: 0,
             fullmove: 1,
             hash: 0,
@@ -78,6 +80,8 @@ impl Board {
             colour: 0,
             ep: 64,
             castle_state: 0b1111,
+            whas_castled: false,
+            bhas_castled: false,
             halfmove: 0,
             fullmove: 0,
             hash: 0,
@@ -271,6 +275,7 @@ impl Board {
             }
             
             MoveType::WKingSide => {
+                self.whas_castled = true;
                 self.pieces[4] ^= SQUARES[7] | SQUARES[5];
                 self.util[0] ^= SQUARES[7] | SQUARES[5];
                 self.util[2] ^= SQUARES[7] | SQUARES[5];
@@ -280,6 +285,7 @@ impl Board {
             }
             
             MoveType::WQueenSide => {
+                self.whas_castled = true;
                 self.pieces[4] ^= SQUARES[0] | SQUARES[3];
                 self.util[0] ^= SQUARES[0] | SQUARES[3];
                 self.util[2] ^= SQUARES[0] | SQUARES[3];
@@ -289,6 +295,7 @@ impl Board {
             }
             
             MoveType::BKingSide => {
+                self.bhas_castled = true;
                 self.pieces[5] ^= SQUARES[63] | SQUARES[61];
                 self.util[1] ^= SQUARES[63] | SQUARES[61];
                 self.util[2] ^= SQUARES[63] | SQUARES[61];
@@ -298,6 +305,7 @@ impl Board {
             }
             
             MoveType::BQueenSide => {
+                self.bhas_castled = true;
                 self.pieces[5] ^= SQUARES[56] | SQUARES[59];
                 self.util[1] ^= SQUARES[56] | SQUARES[59];
                 self.util[2] ^= SQUARES[56] | SQUARES[59];
@@ -446,6 +454,7 @@ impl Board {
                 self.hash ^= tt.zorbist_array[m.xpiece as usize * 64 + m.to as usize];
             }
             MoveType::WKingSide => {
+                self.whas_castled = false;
                 self.pieces[4] ^= SQUARES[7] | SQUARES[5];
                 self.util[0] ^= SQUARES[7] | SQUARES[5];
                 self.util[2] ^= SQUARES[7] | SQUARES[5];
@@ -454,6 +463,7 @@ impl Board {
                 self.hash ^= tt.zorbist_array[261]; // 4 * 64 + 5
             }
             MoveType::WQueenSide => {
+                self.whas_castled = false;
                 self.pieces[4] ^= SQUARES[0] | SQUARES[3];
                 self.util[0] ^= SQUARES[0] | SQUARES[3];
                 self.util[2] ^= SQUARES[0] | SQUARES[3];
@@ -462,6 +472,7 @@ impl Board {
                 self.hash ^= tt.zorbist_array[259]; // 4 * 64 + 3
             }
             MoveType::BKingSide => {
+                self.bhas_castled = false;
                 self.pieces[5] ^= SQUARES[63] | SQUARES[61];
                 self.util[1] ^= SQUARES[63] | SQUARES[61];
                 self.util[2] ^= SQUARES[63] | SQUARES[61];
@@ -470,6 +481,7 @@ impl Board {
                 self.hash ^= tt.zorbist_array[381]; // 5 * 64 + 61
             }
             MoveType::BQueenSide => {
+                self.bhas_castled = false;
                 self.pieces[5] ^= SQUARES[56] | SQUARES[59];
                 self.util[1] ^= SQUARES[56] | SQUARES[59];
                 self.util[2] ^= SQUARES[56] | SQUARES[59];
@@ -677,11 +689,7 @@ impl Board {
 
     // returns true if 3 move rep or 50 move rule occurs in this pos 
     pub fn is_bad_pos(&self) -> bool {
-        if self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] == 3 || self.halfmove >= 100 {
-            true
-        } else {
-            false
-        }
+        self.prev_moves[(self.hash & PREV_MOVE_MASK) as usize] == 3 || self.halfmove >= 100
     }
 }
 

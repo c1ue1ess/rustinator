@@ -90,7 +90,7 @@ fn go(board: Board, book_pos: &str, mut use_book: &mut bool, tt: &mut TTable, bo
 
     let mut search = Search::new(board, tt, TimeControl::new_now());
 
-    let best_move = search.iterative_deepening_search();
+    let mut best_move = search.iterative_deepening_search();
     
     println!("bestmove {}", best_move.unwrap().as_uci_string());
 }

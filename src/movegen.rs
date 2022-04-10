@@ -571,29 +571,8 @@ pub fn in_check_now(b: &Board) -> u64 {
     attacks_to(b, k_index, b.colour)
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 pub fn get_xpiece(sq: usize, b: &Board) -> usize {
     let mut square = SQUARES[sq];
-
-    // for i in 0..5 {
-    //     if square & b.pieces[i*2+1-b.colour] > 0 {
-    //         return i*2+1-b.colour
-    //     }
-    // }
-
-    // 12
-    
     
     if (square & b.pieces[1 - b.colour]) > 0 {
         1 - b.colour
@@ -614,15 +593,7 @@ pub fn get_xpiece(sq: usize, b: &Board) -> usize {
 
 pub fn get_piece(sq: usize, b: &Board) -> usize {
     let mut square = SQUARES[sq];
-
-    // for i in 0..5 {
-    //     if square & b.pieces[i*2+b.colour] > 0 {
-    //         return i*2+b.colour
-    //     }
-    // }
     
-    // 12
-
     if (square & b.pieces[b.colour]) > 0 {
 		b.colour
 	} else if (square & b.pieces[2 + b.colour]) > 0 {
@@ -640,80 +611,59 @@ pub fn get_piece(sq: usize, b: &Board) -> usize {
     }
 }
 
-
-
-// #[test]
-// pub fn getting_pieces() {
-//     let mut b = Board::new();
-
-//     assert_eq!(get_piece(8, &b), 0);
-//     assert_eq!(get_piece(60, &b), 12);
-//     assert_eq!(get_piece(0, &b), 4);
-
-    
-//     assert_eq!(get_xpiece(55, &b), 1);
-//     assert_eq!(get_xpiece(5, &b), 12);
-//     assert_eq!(get_xpiece(60, &b), 11);
-
-
-// }
-
-
-
-// #[allow(dead_code)]
 // prints a bit board over the top of a board
-// pub fn print_bb(m: u64, b: &Board) {
-//     let mut out = String::new();
+pub fn print_bb(m: u64, b: &Board) {
+    let mut out = String::new();
 
-//     for i in (1..9).rev() {
-//         let s = i.to_string();
-//         out.push_str(&s);
-//         out.push_str("   ");
+    for i in (1..9).rev() {
+        let s = i.to_string();
+        out.push_str(&s);
+        out.push_str("   ");
 
-//         for j in i * 8 - 8..i * 8 {
-//             if (SQUARES[j] & m) > 0 {
-//                 out.push('(');
-//             } else {
-//                 out.push(' ');
-//             }
+        for j in i * 8 - 8..i * 8 {
+            if (SQUARES[j] & m) > 0 {
+                out.push('(');
+            } else {
+                out.push(' ');
+            }
 
-//             if (SQUARES[j] & b.pieces[0]) > 0 {
-//                 out.push('P');
-//             } else if (SQUARES[j] & b.pieces[1]) > 0 {
-//                 out.push('p');
-//             } else if (SQUARES[j] & b.pieces[2]) > 0 {
-//                 out.push('N');
-//             } else if (SQUARES[j] & b.pieces[3]) > 0 {
-//                 out.push('n');
-//             } else if (SQUARES[j] & b.pieces[4]) > 0 {
-//                 out.push('R');
-//             } else if (SQUARES[j] & b.pieces[5]) > 0 {
-//                 out.push('r');
-//             } else if (SQUARES[j] & b.pieces[6]) > 0 {
-//                 out.push('B');
-//             } else if (SQUARES[j] & b.pieces[7]) > 0 {
-//                 out.push('b');
-//             } else if (SQUARES[j] & b.pieces[8]) > 0 {
-//                 out.push('Q');
-//             } else if (SQUARES[j] & b.pieces[9]) > 0 {
-//                 out.push('q');
-//             } else if (SQUARES[j] & b.pieces[10]) > 0 {
-//                 out.push('K');
-//             } else if (SQUARES[j] & b.pieces[11]) > 0 {
-//                 out.push('k');
-//             } else {
-//                 out.push('-');
-//             }
+            if (SQUARES[j] & b.pieces[0]) > 0 {
+                out.push('P');
+            } else if (SQUARES[j] & b.pieces[1]) > 0 {
+                out.push('p');
+            } else if (SQUARES[j] & b.pieces[2]) > 0 {
+                out.push('N');
+            } else if (SQUARES[j] & b.pieces[3]) > 0 {
+                out.push('n');
+            } else if (SQUARES[j] & b.pieces[4]) > 0 {
+                out.push('R');
+            } else if (SQUARES[j] & b.pieces[5]) > 0 {
+                out.push('r');
+            } else if (SQUARES[j] & b.pieces[6]) > 0 {
+                out.push('B');
+            } else if (SQUARES[j] & b.pieces[7]) > 0 {
+                out.push('b');
+            } else if (SQUARES[j] & b.pieces[8]) > 0 {
+                out.push('Q');
+            } else if (SQUARES[j] & b.pieces[9]) > 0 {
+                out.push('q');
+            } else if (SQUARES[j] & b.pieces[10]) > 0 {
+                out.push('K');
+            } else if (SQUARES[j] & b.pieces[11]) > 0 {
+                out.push('k');
+            } else {
+                out.push('-');
+            }
 
-//             if (SQUARES[j] & m) > 0 {
-//                 out.push(')');
-//             } else {
-//                 out.push(' ');
-//             }
-//         }
-//         out.push('\n');
-//     }
-//     out.push_str("\n     A  B  C  D  E  F  G  H\n");
+            if (SQUARES[j] & m) > 0 {
+                out.push(')');
+            } else {
+                out.push(' ');
+            }
+        }
+        out.push('\n');
+    }
+    out.push_str("\n     A  B  C  D  E  F  G  H\n");
 
-//     println!("{}", out);
-// }
+    println!("{}", out);
+}

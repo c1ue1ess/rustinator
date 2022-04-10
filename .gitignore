@@ -8,3 +8,4 @@ perf.data.old
 games.pgn
 log/
 callgrind*
+out

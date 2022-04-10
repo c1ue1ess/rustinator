@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 
+use crate::eval::PIECE_VALUE;
 use crate::moves::MoveType;
 use crate::{ Board, Move, TTable };
 use crate::movegen::*;
@@ -89,7 +90,7 @@ impl MoveOrderList {
         self.move_scores.len()
     }
 
-    pub fn new_pv_attacks(b: &mut Board, moves: &Vec<Move>, tt: &TTable) -> MoveOrderList {
+    pub fn new_pv_attacks(b: &mut Board, moves: &[Move], tt: &TTable) -> MoveOrderList {
         let mut move_scores = Vec::with_capacity(moves.len());
         
         let bestmove = tt.get_bestmove(b.hash);
@@ -103,19 +104,20 @@ impl MoveOrderList {
                 continue;
             }
              
-            move_scores.push((*m, score_attacks(b, &m, tt)));
+            move_scores.push((*m, score_attacks(b, m, tt)));
             // move_scores.push((m, 0));
 
         }
 
-        if !added && bestmove.is_some() {
-            move_scores.push((bestmove.unwrap(), i32::MAX));
+        if let Some(bm) = bestmove {
+            move_scores.push((bm, i32::MAX));
+
         }
 
         MoveOrderList { move_scores }
     }
 
-    pub fn new_quiet(b: &Board, moves: &Vec<Move>, km: &KillerMoves, tt: &TTable) -> MoveOrderList {
+    pub fn new_quiet(b: &Board, moves: &[Move], km: &KillerMoves, tt: &TTable) -> MoveOrderList {
         let mut move_scores: Vec<(Move, i32)> = Vec::with_capacity(moves.len());
         
         let bestmove = tt.get_bestmove(b.hash);
@@ -127,7 +129,7 @@ impl MoveOrderList {
                 continue;
             }
              
-            move_scores.push((*m, score_quiet(b, &m, km, tt)));
+            move_scores.push((*m, score_quiet(b, m, km, tt)));
             // move_scores.push((m, 0));
 
         }
@@ -136,7 +138,7 @@ impl MoveOrderList {
     }
 
 
-    pub fn new_quiesce(b: &mut Board, moves: &Vec<Move>, tt: &TTable) -> MoveOrderList {
+    pub fn new_quiesce(b: &mut Board, moves: &[Move], tt: &TTable) -> MoveOrderList {
         let mut move_scores = Vec::with_capacity(moves.len());
 
         for m in moves {
@@ -152,7 +154,7 @@ impl MoveOrderList {
         MoveOrderList { move_scores }
     }
     
-    pub fn new_quiesce_in_check(b: &mut Board, moves: &Vec<Move>, tt: &TTable) -> MoveOrderList {
+    pub fn new_quiesce_in_check(b: &mut Board, moves: &[Move], tt: &TTable) -> MoveOrderList {
         let mut move_scores = Vec::with_capacity(moves.len());
 
         for m in moves {
@@ -237,7 +239,7 @@ fn static_exchange_eval(b: &mut Board, m: &Move) -> i32 {
     let mut value = 0;
     
     b.make_no_hashing(m);
-    value = m.xpiece as i32 - see(b, m.to);
+    value = PIECE_VALUE[m.xpiece as usize] - see(b, m.to);
     b.unmake_no_hashing(m);
 
     value
@@ -245,18 +247,18 @@ fn static_exchange_eval(b: &mut Board, m: &Move) -> i32 {
 
 fn see(b: &mut Board, to: u8) -> i32 {
     let mut value = 0;
-    let mut smallest: (Option<Move>, u8) = (None, 12);
+    let mut smallest: (Option<Move>, i32) = (None, PIECE_VALUE[11]);
 
     for m in gen_attk(b){
-        if m.to == to && m.xpiece < smallest.1 {
-            smallest = (Some(m), m.xpiece);
+        if m.to == to && PIECE_VALUE[m.xpiece as usize] < smallest.1 {
+            smallest = (Some(m), PIECE_VALUE[m.xpiece as usize]);
         }
     }
 
-    if smallest.1 < 12 {
+    if smallest.1 < PIECE_VALUE[11] {
         let m = smallest.0.unwrap();
         b.make_no_hashing(&m);
-        value = m.xpiece as i32 - see(b, to);
+        value = PIECE_VALUE[m.xpiece as usize] - see(b, to);
         b.unmake_no_hashing(&m);
     }
 

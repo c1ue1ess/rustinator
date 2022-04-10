@@ -1,8 +1,11 @@
-use crate::board_info::{SQUARES, self, FA, FB, FILES, FH, FG, FC, FD, FE, FF};
+use std::borrow::Borrow;
+use std::panic;
+
+use crate::board_info::{SQUARES, SQ_DISTANCE, self, FA, FB, FILES, FH, FG, FC, FD, FE, FF, R1, R8};
 use crate::search::{Search, MAX_SEARCH_DEPTH};
 use crate::{ Board, Move, TTable };
 use crate::moves::MoveType;
-use crate::movegen::{self, bitscn_fw, in_check_now};
+use crate::movegen::{self, bitscn_fw, in_check_now, print_bb};
 use crate::move_ordering::{MoveOrderList, KillerMoves};
 
 const PAWN: i32 = 100;
@@ -198,7 +201,6 @@ const PAWN_MOBILITY: i32 = 0;
 const KNIGHT_MOBILITY: i32 = 50;
 const ROOK_MOBILITY: i32 = 10;
 const BISHOP_MOBILITY: i32 = 15;
-// queen too agressive so brought this value down from 20
 const QUEEN_MOBILITY: i32 = 10;
 const KING_MOBILITY: i32 = 5;
 
@@ -211,8 +213,28 @@ const PIECE_MOBILITY: [i32; 12] = [
     KING_MOBILITY, KING_MOBILITY
 ];
 
+const CASTLE_BONUS: i32 = 50;
+const PAWN_SHIELD: u64 = 0b11100000111;
+const PAWN_SHIELD_FA: u64 = 0b11000000110;
+const PAWN_SHIELD_FH: u64 = 0b01100000011;
+
+const PAWN_SHIELD_BONUS: i32 = 10;
+
+const PIECE_DISTANCE: [i32; 5] = [
+    // empty
+    0,
+    // knights
+    3,
+    // rooks
+    7,
+    // bishops
+    10,
+    // queens
+    15
+];
+
+
 pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, mate_dist: i32, player: i32) -> i32 {
-    // println!("entered q");
     let eval = evaluate(&mut search.board, player);
     
     if eval >= beta {
@@ -224,11 +246,11 @@ pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, mate_dist: i32, p
     }
 
     let q_narrow = |search: &mut Search| {
-        let attks = movegen::gen_attk(&mut search.board);
+        let attks = movegen::gen_attk(&search.board);
         MoveOrderList::new_quiesce(&mut search.board, &attks, search.tt)
     };
     let q_research = |search: &mut Search| {
-        let moves = movegen::gen_moves(&mut search.board);
+        let moves = movegen::gen_moves(&search.board);
         MoveOrderList::new_quiesce_in_check(&mut search.board, &moves, search.tt)
     };
     
@@ -268,16 +290,12 @@ pub fn quiesce(search: &mut Search, mut alpha: i32, beta: i32, mate_dist: i32, p
 
         }
 
-        if checkmate && no_moves {
-            //dbg!(no_moves);
-            //dbg!(checkmate);
-        } else {
+        if !(checkmate && no_moves) {
             break;
         }
     }
 
     if no_moves && checkmate {
-        // println!("checkmate in q at {mate_dist}");
         CHECKMATE
     } else {
         alpha
@@ -293,6 +311,7 @@ pub fn evaluate(b: &mut Board, player: i32) -> i32 {
     eval += pos_balance(b); 
     eval += mobility(b);
     eval += pawn_structure(b);
+    //eval += king_saftey(b);
     eval *= player;
         
     eval
@@ -313,8 +332,7 @@ fn mat_balance(b: &Board) -> i32 {
     let bishops = BISHOP * (w_bishop_count - b_bishop_count) + w_bishop_bonus - b_bishop_bonus;
 
     let queens = QUEEN * (b.pieces[8].count_ones() as i32 - b.pieces[9].count_ones() as i32);
-    // dont need kings makes no difference
-    //let kings = KING * (b.pieces[10].count_ones() as i32 - b.pieces[11].count_ones() as i32);
+
 
     pawns + knights + rooks + bishops + queens //+ kings
 }
@@ -493,17 +511,142 @@ fn pawn_side_by_side(b: &Board) -> i32 {
     sbs
 }
 
+fn king_saftey(b: &Board) -> i32 {
+    let mut king = 0;
+
+    if b.whas_castled {
+        king += CASTLE_BONUS;
+        
+    }
+    if b.bhas_castled {
+        king -= CASTLE_BONUS;
+    }
+    
+    king += pawn_shield(b);
+   // king += king_tropism(b);
+
+    king
+}
+
+fn pawn_shield(b: &Board) -> i32 {
+    let mut sheild = 0;
+    // white king
+    let wking = b.pieces[10];
+    let mut b_piece_count = 0;
+    b_piece_count += b.pieces[9].count_ones() as i32 * QUEEN;
+    b_piece_count += b.pieces[7].count_ones() as i32 * BISHOP;
+    b_piece_count += b.pieces[5].count_ones() as i32 * ROOK;
+    b_piece_count += b.pieces[3].count_ones() as i32 * KNIGHT;
+    b_piece_count /= 100;
+    if wking & R1 > 0 {
+        let shield_offset = bitscn_fw(&wking) + 7;
+        if wking & FA > 0 {
+            // print_bb(PAWN_SHIELD_FA << shield_offset, b);
+            sheild += (b.pieces[0] & (PAWN_SHIELD_FA << shield_offset)).count_ones() as i32 * b_piece_count;
+            
+        } else if wking & FH > 0 {
+            // print_bb(PAWN_SHIELD_FH << shield_offset, b);
+            sheild += (b.pieces[0] & (PAWN_SHIELD_FH << shield_offset)).count_ones() as i32 * b_piece_count;
+            
+        } else {
+            // print_bb(PAWN_SHIELD << shield_offset, b);
+            sheild += (b.pieces[0] & (PAWN_SHIELD << shield_offset)).count_ones() as i32 * b_piece_count;
+            
+        }
+    } 
+
+    let bking = b.pieces[11];
+    let mut w_piece_count = 0;
+    w_piece_count += b.pieces[8].count_ones() as i32 * QUEEN;
+    w_piece_count += b.pieces[6].count_ones() as i32 * BISHOP;
+    w_piece_count += b.pieces[4].count_ones() as i32 * ROOK;
+    w_piece_count += b.pieces[2].count_ones() as i32 * KNIGHT;
+    w_piece_count %= 100;
+    if bking & R8 > 0 {
+        let shield_offset = bitscn_fw(&bking) - 17;
+        if bking & FA > 0 {
+            // print_bb(PAWN_SHIELD_FA << shield_offset, b);
+            sheild -= (b.pieces[1] & (PAWN_SHIELD_FA << shield_offset)).count_ones() as i32 * w_piece_count;
+        } else if bking & FH > 0 {
+            // print_bb(PAWN_SHIELD_FH << shield_offset, b);
+            sheild -= (b.pieces[1] & (PAWN_SHIELD_FH << shield_offset)).count_ones() as i32 * w_piece_count;
+        } else {
+            // print_bb(PAWN_SHIELD << shield_offset, b);
+            sheild -= (b.pieces[1] & (PAWN_SHIELD << shield_offset)).count_ones() as i32 * w_piece_count;
+        }
+    }
+    //black king
+
+    sheild
+}
+
+fn king_tropism(b: &Board) -> i32 {
+    let mut tropism = 0;
+    let windex = bitscn_fw(&b.pieces[10]);
+    let bindex = bitscn_fw(&b.pieces[11]);
+
+    let mut white = b.util[0];
+    let mut black = b.util[1];
+
+    while black > 0 {
+        tropism -= SQ_DISTANCE[windex][bitscn_fw(&black)] as i32;
+        black &= black-1;
+    }
+
+    while white > 0 {
+        tropism += SQ_DISTANCE[bindex][bitscn_fw(&white)] as i32;
+        white &= white-1;
+    }
+
+    // for i in 1..5 {
+    //     let wp = i*2;
+    //     let bp = i*2+1;
+    //     let mut pieces = b.pieces[bp];
+
+    //     while pieces > 0 {
+    //         let index = bitscn_fw(&pieces);
+    //         let diff = SQ_DISTANCE[windex][index];
+    //         tropism -= (diff as i32 + PIECE_DISTANCE[i]) * 2;
+
+    //         pieces &= pieces-1
+    //     }
+        
+    //     pieces = b.pieces[wp];
+    //     while pieces > 0 {
+    //         let index = bitscn_fw(&pieces);
+    //         let diff = SQ_DISTANCE[bindex][index];
+    //         tropism += (diff as i32 + PIECE_DISTANCE[i]) * 2;
+
+    //         pieces &= pieces-1
+    //     }
+    // }
+
+    tropism
+}
 
 
 #[test]
-fn pawn_score() {
+fn eval_test() {
+    let f = std::fs::read("target/debug/last_pos.txt").unwrap();
+    let buffer = String::from_utf8_lossy(&f);
+    let mut board = Board::new();
+    let tt = TTable::new();
+    let mut pos: Vec<&str> = buffer.trim().split(' ').collect();
+    let mut pos: Vec<String> = pos.iter().map(|s| String::from(*s)).collect();
+    let mut pos = pos[3..pos.len()].to_vec();
+    if pos.len() > 2 
+    {
+        for m in &pos 
+        {
+            let mv = &Move::new_from_text(m, &board);
+            board.make(mv, &tt);
+        }
+    }
     
-    let mut b = Board::new_from_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
-    // let p = pawn_rams(&b);
-
-    let white = evaluate(&mut b, 1);
-    let black = evaluate(&mut b, -1);
-    assert_eq!(white, -black);
-    // assert_eq!(p, RAM_PEN)
-    // assert_eq!(p, 0)
+    let mut b = Board::new_from_fen("7q/6q1/5q2/4q3/3q4/2q5/1q6/K7 w - - 0 1");
+    for i in 0..64 {
+        board.pieces[10] = 1 << i;
+        let t = king_tropism(&board);
+    }
+    
 }

@@ -1,8 +1,4 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
-
-use rayon::prelude::*;
 
 use crate::movegen::{self, gen_attk, in_check_now};
 use crate::move_ordering::{MoveOrderList, RootOrderList, KillerMoves};
@@ -12,15 +8,8 @@ use crate::eval::{self, STALEMATE, CHECKMATE};
 use crate::transposition_table::{ NodeType, TEntry };
 
 pub const MAX_SEARCH_DEPTH: usize = 50;
-
 const TIME_LIM_MS: u64 = 5000;
-const ALPHA_TIME_BONUS: u64 = 250;
 
-pub struct Search<'a> {
-    pub board: Board,
-    pub tt: &'a mut TTable,
-    pub tc: TimeControl
-}
 #[derive(Clone, Copy)]
 pub struct TimeControl {
     pub start_time: Instant,
@@ -38,6 +27,12 @@ impl TimeControl {
     pub fn add_time(&mut self, milli: u64){
         self.additional += milli;
     }
+}
+
+pub struct Search<'a> {
+    pub board: Board,
+    pub tt: &'a mut TTable,
+    pub tc: TimeControl
 }
 
 impl <'a> Search<'a> {
@@ -91,10 +86,10 @@ impl <'a> Search<'a> {
                 return best_score;
             }
 
-            self.board.make(&m, self.tt);
+            self.board.make(m, self.tt);
 
             if movegen::in_check_next(&self.board) > 0 {
-                self.board.unmake(&m, self.tt);
+                self.board.unmake(m, self.tt);
                 continue;
             }
 
@@ -114,7 +109,7 @@ impl <'a> Search<'a> {
                 );
             } 
 
-            self.board.unmake(&m, self.tt);
+            self.board.unmake(m, self.tt);
         }
         
         root_moves.done_iteration();

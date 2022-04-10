@@ -1,7 +1,4 @@
 #![allow(unused)]
-use std::sync::{Arc, Mutex};
-use threadpool::ThreadPool;
-
 use crate::{ Board, Move };
 use crate::moves::MoveType;
 use crate::movegen;
@@ -109,38 +106,4 @@ pub fn perft(b: &mut Board, depth: usize) -> usize {
     }
 
     move_count
-}
-
-pub fn perft_multi_thread(b: &Board, depth: usize) {
-    let moves = movegen::gen_moves(b);
-    let pool = ThreadPool::new(moves.len());
-    // let pool = ThreadPool::new(12);
-    let total_count = Arc::new(Mutex::new(0));
-    for m in moves {
-        let mut new_b = b.clone();
-        let move_count = Arc::clone(&total_count);
-
-        pool.execute(move || {
-            new_b.make_no_hashing(&m);
-
-            if movegen::attacks_to(
-                &new_b,
-                movegen::bitscn_fw(&new_b.pieces[11 - new_b.colour]),
-                (1 - new_b.colour),
-            ) > 0
-            {
-                new_b.unmake_no_hashing(&m);
-                return;
-            }
-            let mc = perft(&mut new_b, depth - 1);
-            new_b.unmake_no_hashing(&m);
-            dbg!(mc);
-            let mut moves = move_count.lock().unwrap();
-            *moves += mc;
-        });
-    }
-
-    pool.join();
-    println!("Move count = {}", total_count.lock().unwrap());
-    println!("Done");
 }
